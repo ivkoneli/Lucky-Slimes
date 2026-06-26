@@ -1,0 +1,26 @@
+{
+  "name": "com.gerty.editor",
+  "version": "0.1.0",
+  "displayName": "Gerty for Unity",
+  "description": "Gerty is the assistant for your assistant that does the heavy lifting in Unity for Claude Code so you don't have to.",
+  "unity": "2023.1",
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.1"
+  },
+  "keywords": [
+    "ai",
+    "claude",
+    "mcp",
+    "editor",
+    "tools",
+    "assistant",
+    "code-generation",
+    "automation",
+    "productivity"
+  ],
+  "author": {
+    "name": "Gerty Dev Team",
+    "email": "team@gerty.dev",
+    "url": "https://gerty.dev"
+  }
+}

@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: ca088652254184744be489c205aca07d
+DefaultImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 347162
+  packageName: Gerty for Unity
+  packageVersion: 1.1.0
+  assetPath: Packages/com.gerty.editor/Samples/GertySampleScene.unity
+  uploadId: 939448

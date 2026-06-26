@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: fcd024e110dc8452d83bc9c5274c1d38
+AssemblyDefinitionImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 347162
+  packageName: Gerty for Unity
+  packageVersion: 1.1.0
+  assetPath: Packages/com.gerty.editor/Editor/Helpers/Gerty.Helpers.asmdef
+  uploadId: 939448

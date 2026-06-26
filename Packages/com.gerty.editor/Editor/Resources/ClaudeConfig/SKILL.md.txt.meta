@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 3c94a4516a80a479587bdf5f89c50c94
+TextScriptImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 347162
+  packageName: Gerty for Unity
+  packageVersion: 1.1.0
+  assetPath: Packages/com.gerty.editor/Editor/Resources/ClaudeConfig/SKILL.md.txt
+  uploadId: 939448
