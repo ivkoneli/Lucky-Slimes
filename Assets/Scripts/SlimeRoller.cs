@@ -51,6 +51,10 @@ namespace SlimeRPG
         public Image cooldownOverlay;   // Filled image over the dice; full -> empty as it cools
         bool _cooling;
 
+        [Header("Auto Roll")]
+        /// <summary>When on (unlocked via the Auto Roll skill), the dice re-rolls itself every cooldown.</summary>
+        public bool autoRoll = false;
+
         /// <summary>Raised whenever owned counts or gold change (inventory UI listens).</summary>
         public System.Action OnInventoryChanged;
         /// <summary>Raised after a successful roll with the rolled rarity index (team listens).</summary>
@@ -89,6 +93,12 @@ namespace SlimeRPG
             if (cooldownOverlay != null) cooldownOverlay.fillAmount = 0f; // ready
             UpdateGoldUI();
             UpdateLuckUI();
+        }
+
+        void Update()
+        {
+            // Auto Roll: fire on cooldown with no tap once the skill is unlocked.
+            if (autoRoll && !_cooling && Application.isPlaying) Roll();
         }
 
         public SlimeRarity Roll()
@@ -189,7 +199,8 @@ namespace SlimeRPG
             return val;
         }
 
-        public void UpdateGoldUI() { if (goldText != null) goldText.text = gold.ToString("N0"); }
-        public void UpdateLuckUI() { if (luckText != null) luckText.text = "Luck " + Mathf.RoundToInt(luckMultiplier * 100f) + "%"; }
+        public void UpdateGoldUI() { if (goldText != null) goldText.text = NumberFormat.Short(gold); }
+        // Luck shown as a multiplier: 100% -> 1x, 150% -> 1.5x, 200% -> 2x.
+        public void UpdateLuckUI() { if (luckText != null) luckText.text = "Luck " + luckMultiplier.ToString("0.##") + "x"; }
     }
 }

@@ -11,7 +11,7 @@ namespace SlimeRPG
     public class SkillNode : MonoBehaviour
     {
         public enum State { Hidden, Available, Purchased }
-        public enum Effect { None, HeroSlot, Luck, Damage, Gold, Crit, Speed }
+        public enum Effect { None, HeroSlot, Luck, Damage, Gold, Crit, Speed, AutoRoll }
 
         public State state = State.Hidden;
         public Effect effect = Effect.None;
@@ -47,6 +47,7 @@ namespace SlimeRPG
         public void OnClick()
         {
             if (state == State.Hidden) return;
+            if (effect == Effect.AutoRoll && state == State.Purchased) return; // one-time unlock
             int cost = CurrentCost;
             if (roller != null && cost > 0)
             {
@@ -75,6 +76,7 @@ namespace SlimeRPG
                 case Effect.Gold: if (combat != null) combat.goldMult += 0.5f; break;
                 case Effect.Crit: if (combat != null) combat.critChance = Mathf.Min(0.9f, combat.critChance + 0.04f); break;
                 case Effect.Speed: if (combat != null) combat.tickInterval = Mathf.Max(0.15f, combat.tickInterval * 0.9f); break;
+                case Effect.AutoRoll: if (roller != null) roller.autoRoll = true; break;
             }
         }
 
@@ -100,8 +102,9 @@ namespace SlimeRPG
             if (background != null) background.color = state == State.Purchased ? PurchasedCol : AvailableCol;
             if (costLabel != null)
             {
-                if (effect == Effect.None) costLabel.text = state == State.Purchased ? "" : (CurrentCost > 0 ? CurrentCost + "g" : "Open");
-                else costLabel.text = (level > 0 ? "Lv" + level + "  " : "") + CurrentCost + "g";
+                if (effect == Effect.AutoRoll) costLabel.text = state == State.Purchased ? "ON" : (CurrentCost > 0 ? NumberFormat.Short(CurrentCost) + "g" : "Free");
+                else if (effect == Effect.None) costLabel.text = state == State.Purchased ? "" : (CurrentCost > 0 ? NumberFormat.Short(CurrentCost) + "g" : "Open");
+                else costLabel.text = (level > 0 ? "Lv" + level + "  " : "") + NumberFormat.Short(CurrentCost) + "g";
             }
         }
     }

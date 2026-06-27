@@ -61,7 +61,7 @@ namespace SlimeRPG
                 for (int i = 0; i < countTexts.Length; i++)
                 {
                     int c = (roller.owned != null && i < roller.owned.Length) ? roller.owned[i] : 0;
-                    if (countTexts[i] != null) countTexts[i].text = "x" + c;
+                    if (countTexts[i] != null) countTexts[i].text = "x" + NumberFormat.Short(c);
                     if (rowBackgrounds != null && i < rowBackgrounds.Length && rowBackgrounds[i] != null)
                         rowBackgrounds[i].color = (i == selected) ? RowSelected : RowNormal;
                 }
@@ -73,14 +73,14 @@ namespace SlimeRPG
                 {
                     int dupes = (roller.owned != null && selected < roller.owned.Length) ? Mathf.Max(0, roller.owned[selected] - 1) : 0;
                     int unit = (roller.sellValues != null && selected < roller.sellValues.Length) ? roller.sellValues[selected] : 1;
-                    sellLabel.text = dupes > 0 ? $"Sell {dupes} dupes  (+{dupes * unit}g)" : "No dupes to sell";
+                    sellLabel.text = dupes > 0 ? $"Sell {NumberFormat.Short(dupes)} dupes  (+{NumberFormat.Short((long)dupes * unit)}g)" : "No dupes to sell";
                 }
             }
 
             if (unlockSlotLabel != null && team != null)
             {
                 int cost = team.NextSlotCost();
-                unlockSlotLabel.text = cost < 0 ? "Team Full (5/5)" : $"Unlock Slot ({cost}g)";
+                unlockSlotLabel.text = cost < 0 ? "Team Full (5/5)" : $"Unlock Slot ({NumberFormat.Short(cost)}g)";
             }
         }
     }

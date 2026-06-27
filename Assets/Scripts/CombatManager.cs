@@ -40,7 +40,6 @@ namespace SlimeRPG
         static readonly Color Forest    = new Color(0.46f, 0.74f, 0.42f);
         static readonly Color ForestDim = new Color(0.22f, 0.34f, 0.22f);
         static readonly Color DoneCol   = new Color(0.34f, 0.52f, 0.32f);
-        static readonly Color BossRed   = new Color(0.85f, 0.32f, 0.32f);
         static readonly Color HpGreen   = new Color(0.45f, 0.85f, 0.40f);
         static readonly Color HpRed     = new Color(0.88f, 0.36f, 0.34f);
 
@@ -150,7 +149,7 @@ namespace SlimeRPG
             rt.sizeDelta = new Vector2(220, 56);
             rt.anchoredPosition = at.anchoredPosition + new Vector2(0, -at.sizeDelta.y * 0.4f);
             var t = go.AddComponent<Text>();
-            t.font = font; t.text = "+" + amount + "g"; t.alignment = TextAnchor.MiddleCenter; t.fontSize = 36;
+            t.font = font; t.text = "+" + NumberFormat.Short(amount) + "g"; t.alignment = TextAnchor.MiddleCenter; t.fontSize = 36;
             t.color = new Color(1f, 0.84f, 0.25f); t.fontStyle = FontStyle.Bold;
             t.horizontalOverflow = HorizontalWrapMode.Overflow; t.verticalOverflow = VerticalWrapMode.Overflow;
             go.AddComponent<DamageNumber>().Init(t);
@@ -203,10 +202,10 @@ namespace SlimeRPG
             for (int i = 0; i < dots.Length; i++)
             {
                 if (dots[i] == null) continue;
-                bool isBoss = (i == 9);
-                if (i == cur) dots[i].color = isBoss ? new Color(1f, 0.45f, 0.4f) : Forest;
+                // The boss dot (index 9) is just bigger — same green palette as the rest.
+                if (i == cur) dots[i].color = Forest;
                 else if (i < cur) dots[i].color = DoneCol;
-                else dots[i].color = isBoss ? BossRed : ForestDim;
+                else dots[i].color = ForestDim;
             }
         }
 
@@ -274,7 +273,7 @@ namespace SlimeRPG
             rt.anchoredPosition = at.anchoredPosition + new Vector2(Random.Range(-24f, 24f), at.sizeDelta.y * 0.4f);
 
             var t = go.AddComponent<Text>();
-            t.font = font; t.text = amount.ToString(); t.alignment = TextAnchor.MiddleCenter;
+            t.font = font; t.text = NumberFormat.Short(amount); t.alignment = TextAnchor.MiddleCenter;
             t.fontSize = crit ? 56 : 40;
             t.color = crit ? new Color(1f, 0.85f, 0.2f) : Color.white;
             t.fontStyle = crit ? FontStyle.Bold : FontStyle.Normal;

@@ -31,7 +31,6 @@ namespace SlimeRPG.EditorTools
         static readonly Color PanelDark2 = new Color(0.10f, 0.11f, 0.14f, 1f);
         static readonly Color Forest     = new Color(0.46f, 0.74f, 0.42f, 1f);
         static readonly Color ForestDim  = new Color(0.22f, 0.34f, 0.22f, 1f);
-        static readonly Color BossRed     = new Color(0.85f, 0.32f, 0.32f, 1f);
         static readonly Color GoldCol     = new Color(1f, 0.84f, 0.25f, 1f);
         static readonly Color TextCol     = new Color(0.92f, 0.94f, 0.97f, 1f);
         static readonly Color SubTextCol  = new Color(0.66f, 0.69f, 0.75f, 1f);
@@ -229,7 +228,7 @@ namespace SlimeRPG.EditorTools
             var luckPill = MakePanel("LuckPill", topBar.transform, PanelDark2);
             var lp = luckPill.rectTransform; lp.anchorMin = lp.anchorMax = new Vector2(1, 0.5f); lp.pivot = new Vector2(1, 0.5f);
             lp.sizeDelta = new Vector2(300, 92); lp.anchoredPosition = new Vector2(-36, 0);
-            luckText = MakeText("LuckText", luckPill.transform, "Luck 100%", 38, Forest, TextAnchor.MiddleCenter);
+            luckText = MakeText("LuckText", luckPill.transform, "Luck 1x", 38, Forest, TextAnchor.MiddleCenter);
             Stretch(luckText.rectTransform);
         }
 
@@ -271,8 +270,8 @@ namespace SlimeRPG.EditorTools
             {
                 int stageNum = i + 1;
                 bool isBoss = (stageNum % 10 == 0); bool isCurrent = (stageNum == 1);
-                float size = isBoss ? 72f : 46f;
-                Color dc = isBoss ? BossRed : (isCurrent ? Forest : ForestDim);
+                float size = isBoss ? 72f : 46f; // boss dot is just bigger, same green palette
+                Color dc = isCurrent ? Forest : ForestDim;
                 var dot = MakeCircle("Dot_" + stageNum, pt, dc);
                 var d = dot.rectTransform; d.anchorMin = d.anchorMax = new Vector2(0.5f, 0.5f); d.pivot = new Vector2(0.5f, 0.5f);
                 d.sizeDelta = new Vector2(size, size); d.anchoredPosition = new Vector2(startX + i * stepX, 0);
@@ -496,9 +495,9 @@ namespace SlimeRPG.EditorTools
                 ctr + new Vector2(-W * 0.75f, -H * 0.5f),
                 ctr + new Vector2(-W * 0.75f,  H * 0.5f),
             };
-            string[] names = { "Start", "Hero Slot", "Luck", "Damage", "Gold", "Crit", "Speed" };
+            string[] names = { "Auto Roll", "Hero Slot", "Luck", "Damage", "Gold", "Crit", "Speed" };
             SkillNode.Effect[] effects = {
-                SkillNode.Effect.None, SkillNode.Effect.HeroSlot, SkillNode.Effect.Luck, SkillNode.Effect.Damage,
+                SkillNode.Effect.AutoRoll, SkillNode.Effect.HeroSlot, SkillNode.Effect.Luck, SkillNode.Effect.Damage,
                 SkillNode.Effect.Gold, SkillNode.Effect.Crit, SkillNode.Effect.Speed
             };
             int[] baseCosts = { 0, 100, 60, 60, 60, 80, 80 };

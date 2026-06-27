@@ -116,7 +116,7 @@ namespace SlimeRPG
             if (unlockSlotLabel != null)
             {
                 int c = NextSlotCost();
-                unlockSlotLabel.text = c < 0 ? "Team Full (5/5)" : "Unlock Team Slot  (" + c + "g)";
+                unlockSlotLabel.text = c < 0 ? "Team Full (5/5)" : "Unlock Team Slot  (" + NumberFormat.Short(c) + "g)";
             }
             OnTeamChanged?.Invoke();
         }
