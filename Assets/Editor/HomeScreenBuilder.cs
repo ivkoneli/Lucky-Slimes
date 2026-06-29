@@ -74,9 +74,11 @@ namespace SlimeRPG.EditorTools
             BuildTopBar(root, out Text goldText, out Text luckText);
             BuildStageTitle(root, out Text stageNumText);
             var dots = BuildProgressRoad(root);
-            BuildBottomSection(root, out Button diceBtn, out Image diceImg, out Image cooldownOverlay, out Button invBtn, out Button skillsBtn, out Image[] slotMini, out GameObject[] slotLock, out Button[] slotButtons, out Text[] slotButtonLabels, out GameObject[] slotCoins, out Text[] slotCostLabels, out DiceSpinner diceSpinner, out GameObject[] streakCubes);
+            BuildBossTimer(root, out GameObject bossTimerRoot, out Text bossTimerText);
+            BuildBottomSection(root, out Button diceBtn, out Image diceImg, out Image cooldownOverlay, out Button invBtn, out Button skillsBtn, out Button collectionBtn, out Image[] slotMini, out GameObject[] slotLock, out Button[] slotButtons, out Text[] slotButtonLabels, out GameObject[] slotCoins, out Text[] slotCostLabels, out Button[] slotEquipBtns, out DiceSpinner diceSpinner, out GameObject[] streakCubes);
             BuildPullPopup(root, out Text popupName, out Text popupChance, out GameObject popupRoot);
             var invUI = BuildInventoryPanel(root, out GameObject invPanel, out Button invClose);
+            var collUI = BuildCollectionPanel(root, out GameObject collPanel, out Button collClose);
             BuildSkillTreePanel(root, out GameObject skillsPanel, out Button skillsClose, out SkillNode[] skillNodes);
 
             var gm = new GameObject("GameManager");
@@ -93,13 +95,25 @@ namespace SlimeRPG.EditorTools
             roller.streakCubes = streakCubes;
             roller.diceSpinner = diceSpinner;
             roller.rollLabel = GameObject.Find("RollLabel"); // "TAP TO ROLL" — hidden after first roll
+            roller.plusOneAnchor = diceImg.rectTransform;    // floating "+1" spawns at the dice
+            roller.font = _font;
+            diceSpinner.roller = roller;                      // reel pulls the curated slime list from here
             diceSpinner.SetFace(5); // show a default face at rest
             invUI.roller = roller;
+            collUI.roller = roller;
+
+            // "new slime" alert badge — parented to the NavBar (last child) so it draws OVER the adjacent button
+            var collBadge = MakeCircle("CollBadge", collectionBtn.transform.parent, new Color(0.86f, 0.26f, 0.30f, 1f));
+            var cbr = collBadge.rectTransform; cbr.anchorMin = cbr.anchorMax = new Vector2(0.2f, 1f); cbr.pivot = new Vector2(1f, 1f);
+            cbr.sizeDelta = new Vector2(46, 46); cbr.anchoredPosition = new Vector2(-8, -6); collBadge.raycastTarget = false;
+            var cbt = MakeText("N", collBadge.transform, "1", 26, Color.white, TextAnchor.MiddleCenter); cbt.raycastTarget = false; Stretch(cbt.rectTransform);
+            collBadge.gameObject.SetActive(false);
+            roller.collectionBadge = collBadge.gameObject; roller.collectionBadgeText = cbt;
 
             var nav = gm.AddComponent<ScreenNav>();
-            nav.inventoryButton = invBtn; nav.skillsButton = skillsBtn;
-            nav.inventoryPanel = invPanel; nav.skillsPanel = skillsPanel;
-            nav.inventoryClose = invClose; nav.skillsClose = skillsClose;
+            nav.inventoryButton = invBtn; nav.skillsButton = skillsBtn; nav.collectionButton = collectionBtn;
+            nav.inventoryPanel = invPanel; nav.skillsPanel = skillsPanel; nav.collectionPanel = collPanel;
+            nav.inventoryClose = invClose; nav.skillsClose = skillsClose; nav.collectionClose = collClose;
 
             var combat = gm.AddComponent<CombatManager>();
             combat.enemyContainer = enemyContainer;
@@ -108,6 +122,8 @@ namespace SlimeRPG.EditorTools
             combat.stageNumText = stageNumText;
             combat.dots = dots;
             combat.roller = roller;
+            combat.bossTimerRoot = bossTimerRoot;
+            combat.bossTimerText = bossTimerText;
 
             var team = gm.AddComponent<TeamManager>();
             team.roller = roller;
@@ -119,11 +135,14 @@ namespace SlimeRPG.EditorTools
             team.slotButtonLabels = slotButtonLabels;
             team.slotCoinIcons = slotCoins;
             team.slotCostLabels = slotCostLabels;
+            team.slotEquipButtons = slotEquipBtns;
             team.unlockedSlots = 1;
             team.inventoryPanel = invPanel;
             team.skillsPanel = skillsPanel;
             team.skillStartNode = skillNodes.Length > 0 ? skillNodes[0] : null; // tree centre
-            team.heroSlotNode = skillNodes.Length > 1 ? skillNodes[1] : null;   // Hero Slot
+            var heroSlots = new System.Collections.Generic.List<SkillNode>();
+            foreach (var nd in skillNodes) if (nd.effect == SkillNode.Effect.HeroSlot) heroSlots.Add(nd);
+            team.heroSlotNodes = heroSlots.ToArray(); // Hero Slot chain in order
             invUI.team = team;
 
             // wire skill nodes to the live systems
@@ -283,6 +302,23 @@ namespace SlimeRPG.EditorTools
             znr.sizeDelta = new Vector2(-24, 56); znr.anchoredPosition = new Vector2(0, 6);
         }
 
+        // ================= boss timer =================
+
+        static void BuildBossTimer(Transform root, out GameObject timerRoot, out Text timerText)
+        {
+            var p = MakePanel("BossTimer", root, new Color(0.42f, 0.13f, 0.15f, 0.95f));
+            var pr = p.rectTransform; pr.anchorMin = pr.anchorMax = new Vector2(0.5f, 1); pr.pivot = new Vector2(0.5f, 1);
+            pr.sizeDelta = new Vector2(440, 92); pr.anchoredPosition = new Vector2(0, -372);
+            var lab = MakeText("Label", p.transform, "BOSS", 34, new Color(1f, 0.62f, 0.55f), TextAnchor.MiddleLeft);
+            BoldOutline(lab, 2);
+            var lr = lab.rectTransform; lr.anchorMin = new Vector2(0, 0); lr.anchorMax = new Vector2(0.5f, 1); lr.offsetMin = new Vector2(34, 0); lr.offsetMax = Vector2.zero;
+            var t = MakeText("Time", p.transform, "20s", 50, Color.white, TextAnchor.MiddleRight);
+            BoldOutline(t, 2);
+            var tr = t.rectTransform; tr.anchorMin = new Vector2(0.5f, 0); tr.anchorMax = new Vector2(1, 1); tr.offsetMin = Vector2.zero; tr.offsetMax = new Vector2(-34, 0);
+            p.gameObject.SetActive(false);
+            timerRoot = p.gameObject; timerText = t;
+        }
+
         // ================= progress road (no border) =================
 
         static Image[] BuildProgressRoad(Transform root)
@@ -317,7 +353,7 @@ namespace SlimeRPG.EditorTools
 
         // ===== bottom: fixed navbar + scrollable 7-slot slime roster + dice dome =====
 
-        static void BuildBottomSection(Transform root, out Button diceBtn, out Image diceImg, out Image cooldownOverlay, out Button invBtn, out Button skillsBtn, out Image[] slotMini, out GameObject[] slotLock, out Button[] slotButtons, out Text[] slotButtonLabels, out GameObject[] slotCoins, out Text[] slotCostLabels, out DiceSpinner diceSpinner, out GameObject[] streakCubes)
+        static void BuildBottomSection(Transform root, out Button diceBtn, out Image diceImg, out Image cooldownOverlay, out Button invBtn, out Button skillsBtn, out Button collectionBtn, out Image[] slotMini, out GameObject[] slotLock, out Button[] slotButtons, out Text[] slotButtonLabels, out GameObject[] slotCoins, out Text[] slotCostLabels, out Button[] slotEquipBtns, out DiceSpinner diceSpinner, out GameObject[] streakCubes)
         {
             const int SLOTS = 7;
             Color cellFill = new Color(0.13f, 0.15f, 0.18f, 1f);
@@ -352,7 +388,7 @@ namespace SlimeRPG.EditorTools
                 dvr.pivot = new Vector2(0.5f, 0); dvr.sizeDelta = new Vector2(3, -6); dvr.anchoredPosition = new Vector2(0, 0);
                 div.raycastTarget = false;
             }
-            invBtn = navBtns[3]; skillsBtn = navBtns[4];
+            invBtn = navBtns[3]; skillsBtn = navBtns[4]; collectionBtn = navBtns[0];
 
             // ---------- scrollable slime roster (7 horizontal slot-rows) ----------
             float rosterH = 720f;
@@ -381,7 +417,7 @@ namespace SlimeRPG.EditorTools
             scroll.content = content;
 
             slotMini = new Image[SLOTS]; slotLock = new GameObject[SLOTS]; slotButtons = new Button[SLOTS]; slotButtonLabels = new Text[SLOTS];
-            slotCoins = new GameObject[SLOTS]; slotCostLabels = new Text[SLOTS];
+            slotCoins = new GameObject[SLOTS]; slotCostLabels = new Text[SLOTS]; slotEquipBtns = new Button[SLOTS];
             for (int i = 0; i < SLOTS; i++)
             {
                 float y = -rowGap - i * (rowH + rowGap);
@@ -398,6 +434,14 @@ namespace SlimeRPG.EditorTools
                 mr.sizeDelta = new Vector2(104, 104); mr.anchoredPosition = new Vector2(24, 0);
                 mini.raycastTarget = false; mini.gameObject.SetActive(false);
                 slotMini[i] = mini;
+
+                // "Equip" button where the slime icon goes — shown when the slot is unlocked but empty; opens inventory
+                var eqBtn = MakePanel("EquipBtn", rowFill.transform, new Color(0.28f, 0.42f, 0.58f, 1f));
+                var eqr = eqBtn.rectTransform; eqr.anchorMin = eqr.anchorMax = new Vector2(0, 0.5f); eqr.pivot = new Vector2(0, 0.5f);
+                eqr.sizeDelta = new Vector2(150, 86); eqr.anchoredPosition = new Vector2(18, 0);
+                slotEquipBtns[i] = eqBtn.gameObject.AddComponent<Button>(); slotEquipBtns[i].targetGraphic = eqBtn;
+                var eqlb = MakeText("L", eqBtn.transform, "Equip", 26, Color.white, TextAnchor.MiddleCenter); eqlb.raycastTarget = false; Stretch(eqlb.rectTransform);
+                eqBtn.gameObject.SetActive(false);
 
                 // level + ability slots
                 var lvl = MakeText("Level", rowFill.transform, "Lv 1", 28, TextCol, TextAnchor.MiddleLeft);
@@ -485,6 +529,26 @@ namespace SlimeRPG.EditorTools
             cd.type = Image.Type.Filled; cd.fillMethod = Image.FillMethod.Radial360; cd.fillOrigin = (int)Image.Origin360.Top; cd.fillClockwise = true;
             cd.fillAmount = 0f; cd.raycastTarget = false;
             cooldownOverlay = cd;
+
+            // reel: a SLIME FACE (body + eyes) flashing over the (hidden) cube while spinning; "2X" frame mixed in
+            var reel = MakeCircle("DiceReel", rosterOuter.transform, RarityCols[0]);
+            var rlr = reel.rectTransform; rlr.anchorMin = rlr.anchorMax = new Vector2(0.5f, 1); rlr.pivot = new Vector2(0.5f, 0.5f);
+            rlr.sizeDelta = new Vector2(diceD, diceD); rlr.anchoredPosition = new Vector2(0, diceCY);
+            reel.raycastTarget = false;
+            var reelEyes = new GameObject("Eyes", typeof(RectTransform));
+            reelEyes.transform.SetParent(reel.transform, false);
+            Stretch(reelEyes.GetComponent<RectTransform>());
+            float reo = diceD * 0.16f, reye = diceD * 0.17f, rey = diceD * 0.06f;
+            var eL = MakeCircle("EyeL", reelEyes.transform, EyeDark); eL.raycastTarget = false;
+            var eLr = eL.rectTransform; eLr.anchorMin = eLr.anchorMax = new Vector2(0.5f, 0.5f); eLr.pivot = new Vector2(0.5f, 0.5f); eLr.sizeDelta = new Vector2(reye, reye); eLr.anchoredPosition = new Vector2(-reo, rey);
+            var eR = MakeCircle("EyeR", reelEyes.transform, EyeDark); eR.raycastTarget = false;
+            var eRr = eR.rectTransform; eRr.anchorMin = eRr.anchorMax = new Vector2(0.5f, 0.5f); eRr.pivot = new Vector2(0.5f, 0.5f); eRr.sizeDelta = new Vector2(reye, reye); eRr.anchoredPosition = new Vector2(reo, rey);
+            var reelTxt = MakeText("ReelText", reel.transform, "2X", 70, Color.white, TextAnchor.MiddleCenter);
+            BoldOutline(reelTxt, 4); reelTxt.raycastTarget = false; Stretch(reelTxt.rectTransform);
+            reelTxt.gameObject.SetActive(false);
+            reel.gameObject.SetActive(false);
+            diceSpinner.reelIcon = reel; diceSpinner.reelEyes = reelEyes; diceSpinner.reelText = reelTxt;
+            diceSpinner.reelColors = (Color[])RarityCols.Clone();
 
             // orbit streak-cubes (Gold / Platinum / Diamond) on the dome crown; hidden until unlocked
             Color[] streakCols = { new Color(1f, 0.84f, 0.25f), new Color(0.82f, 0.85f, 0.90f), new Color(0.55f, 0.86f, 0.96f) };
@@ -702,6 +766,65 @@ namespace SlimeRPG.EditorTools
             return ui;
         }
 
+        // ================= collection =================
+
+        static CollectionUI BuildCollectionPanel(Transform root, out GameObject panelGO, out Button closeBtn)
+        {
+            var panel = MakeImage("CollectionPanel", root, new Color(0, 0, 0, 0.66f));
+            Stretch(panel.rectTransform);
+            panelGO = panel.gameObject;
+            var ccv = panelGO.AddComponent<Canvas>(); ccv.overrideSorting = true; ccv.sortingOrder = 30;
+            panelGO.AddComponent<GraphicRaycaster>();
+            var ui = panelGO.AddComponent<CollectionUI>();
+
+            var card = MakePanel("Card", panel.transform, PanelDark);
+            var cr = card.rectTransform; cr.anchorMin = cr.anchorMax = new Vector2(0.5f, 0.5f); cr.pivot = new Vector2(0.5f, 0.5f);
+            cr.sizeDelta = new Vector2(940, 1340); cr.anchoredPosition = Vector2.zero;
+            var title = MakeText("Title", card.transform, "Collection", 46, TextCol, TextAnchor.MiddleLeft);
+            var ti = title.rectTransform; ti.anchorMin = new Vector2(0, 1); ti.anchorMax = new Vector2(1, 1); ti.pivot = new Vector2(0.5f, 1); ti.sizeDelta = new Vector2(-80, 90); ti.anchoredPosition = new Vector2(40, -30);
+            closeBtn = MakeCloseButton(card.transform);
+
+            var scrollGO = new GameObject("Scroll", typeof(RectTransform), typeof(Image), typeof(ScrollRect));
+            scrollGO.transform.SetParent(card.transform, false);
+            var sc = scrollGO.GetComponent<RectTransform>(); sc.anchorMin = Vector2.zero; sc.anchorMax = Vector2.one; sc.offsetMin = new Vector2(24, 24); sc.offsetMax = new Vector2(-24, -130);
+            scrollGO.GetComponent<Image>().color = new Color(0.09f, 0.10f, 0.13f, 1f);
+            var scroll = scrollGO.GetComponent<ScrollRect>(); scroll.horizontal = false; scroll.vertical = true; scroll.movementType = ScrollRect.MovementType.Clamped; scroll.scrollSensitivity = 24f;
+            var viewGO = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(RectMask2D));
+            viewGO.transform.SetParent(scrollGO.transform, false);
+            var vv = viewGO.GetComponent<RectTransform>(); vv.anchorMin = Vector2.zero; vv.anchorMax = Vector2.one; vv.offsetMin = new Vector2(8, 8); vv.offsetMax = new Vector2(-8, -8);
+            viewGO.GetComponent<Image>().color = new Color(0, 0, 0, 0.0015f);
+            scroll.viewport = vv;
+            var contentGO = new GameObject("Content", typeof(RectTransform), typeof(GridLayoutGroup), typeof(ContentSizeFitter));
+            contentGO.transform.SetParent(viewGO.transform, false);
+            var cc = contentGO.GetComponent<RectTransform>(); cc.anchorMin = new Vector2(0, 1); cc.anchorMax = new Vector2(0, 1); cc.pivot = new Vector2(0, 1); cc.anchoredPosition = Vector2.zero; cc.sizeDelta = Vector2.zero;
+            var grid = contentGO.GetComponent<GridLayoutGroup>(); grid.cellSize = new Vector2(270, 300); grid.spacing = new Vector2(14, 14); grid.padding = new RectOffset(8, 8, 8, 8); grid.childAlignment = TextAnchor.UpperLeft; grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount; grid.constraintCount = 3;
+            var fit = contentGO.GetComponent<ContentSizeFitter>(); fit.horizontalFit = ContentSizeFitter.FitMode.PreferredSize; fit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            scroll.content = cc;
+
+            int n = RarityNames.Length;
+            var icons = new Image[n]; var eyesArr = new GameObject[n]; var names = new Text[n]; var chances = new Text[n];
+            for (int i = 0; i < n; i++)
+            {
+                var cell = MakePanel("Coll_" + i, contentGO.transform, new Color(0.13f, 0.15f, 0.18f, 1f));
+                var body = MakeCircle("Body", cell.transform, new Color(0.20f, 0.22f, 0.26f));
+                var bdr = body.rectTransform; bdr.anchorMin = bdr.anchorMax = new Vector2(0.5f, 1); bdr.pivot = new Vector2(0.5f, 1); bdr.sizeDelta = new Vector2(120, 120); bdr.anchoredPosition = new Vector2(0, -16);
+                body.raycastTarget = false; icons[i] = body;
+                var eyes = new GameObject("Eyes", typeof(RectTransform)); eyes.transform.SetParent(body.transform, false); Stretch(eyes.GetComponent<RectTransform>());
+                float eo = 120 * 0.16f, eye = 120 * 0.17f, ey = 120 * 0.06f;
+                var eL = MakeCircle("EyeL", eyes.transform, EyeDark); eL.raycastTarget = false; var eLr = eL.rectTransform; eLr.anchorMin = eLr.anchorMax = new Vector2(0.5f, 0.5f); eLr.pivot = new Vector2(0.5f, 0.5f); eLr.sizeDelta = new Vector2(eye, eye); eLr.anchoredPosition = new Vector2(-eo, ey);
+                var eR = MakeCircle("EyeR", eyes.transform, EyeDark); eR.raycastTarget = false; var eRr = eR.rectTransform; eRr.anchorMin = eRr.anchorMax = new Vector2(0.5f, 0.5f); eRr.pivot = new Vector2(0.5f, 0.5f); eRr.sizeDelta = new Vector2(eye, eye); eRr.anchoredPosition = new Vector2(eo, ey);
+                eyes.SetActive(false); eyesArr[i] = eyes;
+                var nm = MakeText("Name", cell.transform, "???", 24, SubTextCol, TextAnchor.MiddleCenter); nm.raycastTarget = false;
+                var nmr = nm.rectTransform; nmr.anchorMin = new Vector2(0, 1); nmr.anchorMax = new Vector2(1, 1); nmr.pivot = new Vector2(0.5f, 1); nmr.sizeDelta = new Vector2(-8, 40); nmr.anchoredPosition = new Vector2(0, -142);
+                names[i] = nm;
+                var ch = MakeText("Chance", cell.transform, "1/?", 30, GoldCol, TextAnchor.MiddleCenter); ch.raycastTarget = false;
+                var chr = ch.rectTransform; chr.anchorMin = new Vector2(0, 0); chr.anchorMax = new Vector2(1, 0); chr.pivot = new Vector2(0.5f, 0); chr.sizeDelta = new Vector2(-8, 50); chr.anchoredPosition = new Vector2(0, 18);
+                chances[i] = ch;
+            }
+            ui.icons = icons; ui.eyes = eyesArr; ui.names = names; ui.chances = chances;
+            return ui;
+        }
+
         // ================= skill tree =================
 
         static void BuildSkillTreePanel(Transform root, out GameObject panelGO, out Button closeBtn, out SkillNode[] nodesOut)
@@ -722,39 +845,70 @@ namespace SlimeRPG.EditorTools
             ti.sizeDelta = new Vector2(-80, 90); ti.anchoredPosition = new Vector2(40, -30);
             closeBtn = MakeCloseButton(card.transform);
 
-            var hint = MakeText("Hint", card.transform, "Buy a hex (gold) to apply it and reveal its neighbours", 26, SubTextCol, TextAnchor.MiddleCenter);
+            var hint = MakeText("Hint", card.transform, "Buy a hex to unlock it · drag to pan · scroll / pinch to zoom", 24, SubTextCol, TextAnchor.MiddleCenter);
             var hr = hint.rectTransform; hr.anchorMin = new Vector2(0, 0); hr.anchorMax = new Vector2(1, 0); hr.pivot = new Vector2(0.5f, 0);
-            hr.sizeDelta = new Vector2(-60, 56); hr.anchoredPosition = new Vector2(0, 40);
+            hr.sizeDelta = new Vector2(-60, 52); hr.anchoredPosition = new Vector2(0, 24);
 
+            // pan/zoom viewport holding a movable tree-content
+            var vpGO = new GameObject("TreeViewport", typeof(RectTransform), typeof(Image), typeof(RectMask2D));
+            vpGO.transform.SetParent(card.transform, false);
+            var vprt = vpGO.GetComponent<RectTransform>(); vprt.anchorMin = Vector2.zero; vprt.anchorMax = Vector2.one; vprt.offsetMin = new Vector2(20, 92); vprt.offsetMax = new Vector2(-20, -108);
+            vpGO.GetComponent<Image>().color = new Color(0.09f, 0.10f, 0.13f, 1f);
+            var contentGO = new GameObject("TreeContent", typeof(RectTransform));
+            contentGO.transform.SetParent(vpGO.transform, false);
+            var content = contentGO.GetComponent<RectTransform>(); content.anchorMin = content.anchorMax = new Vector2(0.5f, 0.5f); content.pivot = new Vector2(0.5f, 0.5f); content.sizeDelta = new Vector2(100, 100); content.anchoredPosition = Vector2.zero;
+            var pz = vpGO.AddComponent<PanZoom>(); pz.content = content;
+
+            // ----- chained single-purchase tree (each hex unlocks its neighbour) -----
             float W = 178f, H = W * Mathf.Sqrt(3f) / 2f;
-            Vector2 ctr = new Vector2(0, 40);
-            Vector2[] pos = {
-                ctr,
-                ctr + new Vector2(0,  H),
-                ctr + new Vector2( W * 0.75f,  H * 0.5f),
-                ctr + new Vector2( W * 0.75f, -H * 0.5f),
-                ctr + new Vector2(0, -H),
-                ctr + new Vector2(-W * 0.75f, -H * 0.5f),
-                ctr + new Vector2(-W * 0.75f,  H * 0.5f),
-                ctr + new Vector2(-W * 1.5f,  H),   // Roll Speed: one ring out past Speed (upper-left)
-            };
-            string[] names = { "Auto Roll", "Hero Slot", "Luck", "Damage", "Gold", "Crit", "Speed", "Roll Speed" };
-            SkillNode.Effect[] effects = {
-                SkillNode.Effect.AutoRoll, SkillNode.Effect.HeroSlot, SkillNode.Effect.Luck, SkillNode.Effect.Damage,
-                SkillNode.Effect.Gold, SkillNode.Effect.Crit, SkillNode.Effect.Speed, SkillNode.Effect.Spin
-            };
-            int[] baseCosts = { 0, 100, 60, 60, 60, 80, 80, 120 };
+            Vector2 dN = new Vector2(0, H), dNE = new Vector2(W * 0.75f, H * 0.5f), dSE = new Vector2(W * 0.75f, -H * 0.5f),
+                    dS = new Vector2(0, -H), dSW = new Vector2(-W * 0.75f, -H * 0.5f), dNW = new Vector2(-W * 0.75f, H * 0.5f);
+            var nodes = new System.Collections.Generic.List<SkillNode>();
 
-            var nodes = new SkillNode[pos.Length];
-            for (int i = 0; i < pos.Length; i++) nodes[i] = MakeHexNode(card.transform, names[i], pos[i], W, effects[i], baseCosts[i]);
+            SkillNode Node(string label, Vector2 p, SkillNode.Effect eff, int cost)
+            {
+                var nn = MakeHexNode(content, label, p, W, eff, cost);
+                nn.neighbors = new SkillNode[0];
+                nodes.Add(nn);
+                return nn;
+            }
+            void Link(SkillNode a, SkillNode b)
+            {
+                var l = new System.Collections.Generic.List<SkillNode>(a.neighbors); l.Add(b); a.neighbors = l.ToArray();
+            }
+            void Chain(SkillNode start, Vector2 startPos, Vector2 dir, string baseName, SkillNode.Effect eff, int[] costs)
+            {
+                var prev = start; var p = startPos;
+                for (int i = 0; i < costs.Length; i++) { p += dir; var nn = Node(baseName + " " + (i + 2), p, eff, costs[i]); Link(prev, nn); prev = nn; }
+            }
 
-            nodes[0].neighbors = new[] { nodes[1], nodes[2], nodes[3], nodes[4], nodes[5], nodes[6] };
-            for (int i = 1; i < nodes.Length; i++) nodes[i].neighbors = new SkillNode[0];
-            nodes[6].neighbors = new[] { nodes[7] }; // Speed reveals Roll Speed
+            Vector2 c0 = Vector2.zero;
+            var center = Node("Start", c0, SkillNode.Effect.AutoRoll, 0);                       // [0]
 
-            nodes[0].SetState(SkillNode.State.Available);
-            for (int i = 1; i < nodes.Length; i++) nodes[i].SetState(SkillNode.State.Hidden);
-            nodesOut = nodes;
+            var hs1 = Node("Hero Slot", c0 + dN, SkillNode.Effect.HeroSlot, 100); Link(center, hs1); // [1]
+            Chain(hs1, c0 + dN, dN, "Hero Slot", SkillNode.Effect.HeroSlot, new[] { 300, 800, 2000 });
+
+            var lk1 = Node("Luck", c0 + dNE, SkillNode.Effect.Luck, 60); Link(center, lk1);
+            Chain(lk1, c0 + dNE, dNE, "Luck", SkillNode.Effect.Luck, new[] { 160, 420 });
+
+            var dm1 = Node("Damage", c0 + dSE, SkillNode.Effect.Damage, 60); Link(center, dm1);
+            Chain(dm1, c0 + dSE, dSE, "Damage", SkillNode.Effect.Damage, new[] { 160, 420 });
+
+            var gd1 = Node("Gold", c0 + dS, SkillNode.Effect.Gold, 60); Link(center, gd1);
+            Chain(gd1, c0 + dS, dS, "Gold", SkillNode.Effect.Gold, new[] { 160, 420 });
+
+            var cr1 = Node("Crit", c0 + dSW, SkillNode.Effect.Crit, 80); Link(center, cr1);
+            Chain(cr1, c0 + dSW, dSW, "Crit", SkillNode.Effect.Crit, new[] { 200, 500 });
+
+            // Speed (NW) forks at Speed 2 -> Speed 3 (right) + Roll Speed (left)
+            var sp1 = Node("Speed", c0 + dNW, SkillNode.Effect.Speed, 80); Link(center, sp1);
+            var sp2 = Node("Speed 2", c0 + dNW * 2, SkillNode.Effect.Speed, 200); Link(sp1, sp2);
+            var sp3 = Node("Speed 3", c0 + dNW * 2 + dNE, SkillNode.Effect.Speed, 500); Link(sp2, sp3);
+            var rs = Node("Roll Speed", c0 + dNW * 3, SkillNode.Effect.Spin, 250); Link(sp2, rs);
+
+            center.SetState(SkillNode.State.Available);
+            for (int i = 1; i < nodes.Count; i++) nodes[i].SetState(SkillNode.State.Hidden);
+            nodesOut = nodes.ToArray(); // [0]=center, [1]=Hero Slot
         }
 
         static SkillNode MakeHexNode(Transform parent, string label, Vector2 pos, float size, SkillNode.Effect effect, int baseCost)
