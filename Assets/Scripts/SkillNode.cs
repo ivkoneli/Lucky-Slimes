@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -11,7 +12,7 @@ namespace SlimeRPG
     public class SkillNode : MonoBehaviour
     {
         public enum State { Hidden, Available, Purchased }
-        public enum Effect { None, HeroSlot, Luck, Damage, Gold, Crit, Speed, AutoRoll }
+        public enum Effect { None, HeroSlot, Luck, Damage, Gold, Crit, Speed, AutoRoll, Spin }
 
         public State state = State.Hidden;
         public Effect effect = Effect.None;
@@ -28,13 +29,37 @@ namespace SlimeRPG
         public SlimeRoller roller;
         public CombatManager combat;
         public TeamManager team;
+        public DiceSpinner spinner;
 
         static readonly Color AvailableCol = new Color(0.20f, 0.34f, 0.26f, 1f); // darker (not bought)
         static readonly Color PurchasedCol = new Color(0.34f, 0.66f, 0.40f, 1f); // brighter (bought)
 
         bool _wired;
+        Coroutine _pulse;
 
         public int CurrentCost => Mathf.RoundToInt(baseCost * Mathf.Pow(10f, level));
+
+        /// <summary>Flash this node white a few times to draw attention (e.g. when sent here to unlock a slot). Stops on click.</summary>
+        public void Highlight()
+        {
+            if (!isActiveAndEnabled || background == null) return;
+            if (_pulse != null) StopCoroutine(_pulse);
+            _pulse = StartCoroutine(PulseRoutine());
+        }
+
+        IEnumerator PulseRoutine()
+        {
+            Color baseCol = state == State.Purchased ? PurchasedCol : AvailableCol;
+            for (int n = 0; n < 6; n++)
+            {
+                float t = 0f;
+                while (t < 0.6f) { t += Time.deltaTime; background.color = Color.Lerp(Color.white, baseCol, t / 0.6f); yield return null; }
+                background.color = baseCol;
+                yield return new WaitForSeconds(0.15f);
+            }
+            background.color = baseCol;
+            _pulse = null;
+        }
 
         void Start() { Wire(); RefreshVisual(); }
 
@@ -63,6 +88,7 @@ namespace SlimeRPG
                 state = State.Purchased;
                 if (neighbors != null) foreach (var n in neighbors) if (n != null) n.Reveal();
             }
+            if (_pulse != null) { StopCoroutine(_pulse); _pulse = null; } // clicked — stop the attention pulse
             RefreshVisual();
         }
 
@@ -77,6 +103,7 @@ namespace SlimeRPG
                 case Effect.Crit: if (combat != null) combat.critChance = Mathf.Min(0.9f, combat.critChance + 0.04f); break;
                 case Effect.Speed: if (combat != null) combat.tickInterval = Mathf.Max(0.15f, combat.tickInterval * 0.9f); break;
                 case Effect.AutoRoll: if (roller != null) roller.autoRoll = true; break;
+                case Effect.Spin: if (spinner != null) spinner.SpeedUp(0.8f); break; // dice spins 20% faster
             }
         }
 

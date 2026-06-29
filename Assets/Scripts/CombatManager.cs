@@ -239,6 +239,8 @@ namespace SlimeRPG
             var bar = new GameObject("HpBar", typeof(RectTransform)); bar.transform.SetParent(go.transform, false);
             var brt = bar.GetComponent<RectTransform>(); brt.anchorMin = brt.anchorMax = new Vector2(0.5f, 0.5f); brt.pivot = new Vector2(0.5f, 0.5f);
             brt.sizeDelta = new Vector2(barW, 30); brt.anchoredPosition = new Vector2(0, size * 0.66f);
+            // override sorting so every HP bar draws ABOVE all slime bodies (never hidden under another slime)
+            var barCanvas = bar.AddComponent<Canvas>(); barCanvas.overrideSorting = true; barCanvas.sortingOrder = 20;
             var barBg = bar.AddComponent<Image>(); barBg.color = new Color(0, 0, 0, 0.7f);
 
             float innerW = barW - 6f;

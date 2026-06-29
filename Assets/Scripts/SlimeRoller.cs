@@ -42,18 +42,27 @@ namespace SlimeRPG
         public Text popupNameText;
         public Text popupChanceText;
         public GameObject popupRoot;
+        public GameObject rollLabel;   // "TAP TO ROLL" — hidden after the first roll
         public float popupSeconds = 2.2f;
         CanvasGroup _popupCg;
         Coroutine _hideCo;
 
+        [Header("Dice Animation")]
+        /// <summary>Plays the 2s tumble on each roll (manual tap or Auto Roll).</summary>
+        public DiceSpinner diceSpinner;
+
         [Header("Roll Cooldown")]
-        public float rollCooldown = 1.0f;
+        public float rollCooldown = 2.1f; // ~ spin length (2s) + small buffer so auto-roll doesn't overlap
         public Image cooldownOverlay;   // Filled image over the dice; full -> empty as it cools
         bool _cooling;
 
         [Header("Auto Roll")]
         /// <summary>When on (unlocked via the Auto Roll skill), the dice re-rolls itself every cooldown.</summary>
         public bool autoRoll = false;
+
+        [Header("Streak Cubes")]
+        /// <summary>Gold/Platinum/Diamond mini-cubes on the dice ring; revealed as roll-streak skills unlock (future).</summary>
+        public GameObject[] streakCubes;
 
         /// <summary>Raised whenever owned counts or gold change (inventory UI listens).</summary>
         public System.Action OnInventoryChanged;
@@ -64,13 +73,14 @@ namespace SlimeRPG
 
         public void SetupDefaultPool()
         {
+            // starter slimes — all "Common" rarity, distinguished by number + colour (stats/odds kept)
             rarities = new List<SlimeRarity>
             {
-                new SlimeRarity { name = "Common",    color = new Color(0.62f, 0.65f, 0.70f), baseWeight = 1f / 2f },
-                new SlimeRarity { name = "Uncommon",  color = new Color(0.35f, 0.82f, 0.40f), baseWeight = 1f / 4f },
-                new SlimeRarity { name = "Rare",      color = new Color(0.28f, 0.55f, 1.00f), baseWeight = 1f / 8f },
-                new SlimeRarity { name = "Epic",      color = new Color(0.70f, 0.35f, 1.00f), baseWeight = 1f / 16f },
-                new SlimeRarity { name = "Legendary", color = new Color(1.00f, 0.80f, 0.16f), baseWeight = 1f / 32f },
+                new SlimeRarity { name = "Common Slime 1", color = new Color(0.62f, 0.65f, 0.70f), baseWeight = 1f / 2f },
+                new SlimeRarity { name = "Common Slime 2", color = new Color(0.35f, 0.82f, 0.40f), baseWeight = 1f / 4f },
+                new SlimeRarity { name = "Common Slime 3", color = new Color(0.28f, 0.55f, 1.00f), baseWeight = 1f / 8f },
+                new SlimeRarity { name = "Common Slime 4", color = new Color(0.70f, 0.35f, 1.00f), baseWeight = 1f / 16f },
+                new SlimeRarity { name = "Common Slime 5", color = new Color(1.00f, 0.80f, 0.16f), baseWeight = 1f / 32f },
             };
             EnsureOwned();
         }
@@ -107,6 +117,7 @@ namespace SlimeRPG
             if (_cooling) return null; // on cooldown — wait for the dice to be ready
             EnsureOwned();
             rollCount++;
+            if (rollLabel != null && rollCount == 1) rollLabel.SetActive(false); // only show "TAP TO ROLL" before the first roll
 
             float total = 0f;
             var w = new float[rarities.Count];
@@ -126,14 +137,14 @@ namespace SlimeRPG
 
             SlimeRarity got = rarities[picked];
             owned[picked]++;
-            if (diceImage != null) diceImage.color = got.color;
-            ShowPopup(got);
+            ShowPopup(got); // dice keeps its own colour now (no rarity tint)
 
             string hex = ColorUtility.ToHtmlStringRGB(got.color);
-            Debug.Log($"<color=#{hex}>● [Roll #{rollCount}] {got.name} Slime!  (base 1/{got.Denominator})  — now own x{owned[picked]}</color>");
+            Debug.Log($"<color=#{hex}>● [Roll #{rollCount}] {got.name}!  (base 1/{got.Denominator})  — now own x{owned[picked]}</color>");
 
             OnInventoryChanged?.Invoke();
             OnRolled?.Invoke(picked);
+            if (diceSpinner != null) diceSpinner.Spin();
             if (Application.isPlaying) StartCoroutine(CooldownRoutine());
             return got;
         }
@@ -155,8 +166,8 @@ namespace SlimeRPG
 
         void ShowPopup(SlimeRarity got)
         {
-            if (popupNameText != null) { popupNameText.text = got.name + " Slime!"; popupNameText.color = got.color; }
-            if (popupChanceText != null) { popupChanceText.text = "Base chance  1/" + got.Denominator; }
+            if (popupNameText != null) { popupNameText.text = got.name; popupNameText.color = got.color; }
+            if (popupChanceText != null) { popupChanceText.text = "1/" + got.Denominator; }
             if (popupRoot != null)
             {
                 popupRoot.SetActive(true);

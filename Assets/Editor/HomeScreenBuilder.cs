@@ -17,7 +17,7 @@ namespace SlimeRPG.EditorTools
     public static class HomeScreenBuilder
     {
         static Font _font;
-        static Sprite _circle, _rounded, _hex;
+        static Sprite _circle, _rounded, _hex, _disc, _dome, _roundedRect;
 
         const float Border = 6f;
 
@@ -27,18 +27,20 @@ namespace SlimeRPG.EditorTools
         static readonly Color Horizon    = new Color(0.36f, 0.52f, 0.30f, 1f);
         static readonly Color RoadCol    = new Color(0.20f, 0.30f, 0.18f, 1f);
         static readonly Color BorderCol  = new Color(0.40f, 0.47f, 0.58f, 1f);
+        static readonly Color RingCol    = new Color(0.50f, 0.58f, 0.70f, 1f); // crisp dice-ring border (brighter than BorderCol)
         static readonly Color PanelDark  = new Color(0.14f, 0.16f, 0.20f, 1f);
         static readonly Color PanelDark2 = new Color(0.10f, 0.11f, 0.14f, 1f);
         static readonly Color Forest     = new Color(0.46f, 0.74f, 0.42f, 1f);
         static readonly Color ForestDim  = new Color(0.22f, 0.34f, 0.22f, 1f);
         static readonly Color GoldCol     = new Color(1f, 0.84f, 0.25f, 1f);
+        static readonly Color GemCol      = new Color(0.45f, 0.80f, 1f, 1f);
         static readonly Color TextCol     = new Color(0.92f, 0.94f, 0.97f, 1f);
         static readonly Color SubTextCol  = new Color(0.66f, 0.69f, 0.75f, 1f);
         static readonly Color DiceCol     = new Color(0.96f, 0.96f, 0.98f, 1f);
         static readonly Color EnemyCol     = new Color(0.78f, 0.34f, 0.42f, 1f);
         static readonly Color EyeDark      = new Color(0.12f, 0.12f, 0.15f, 1f);
 
-        static readonly string[] RarityNames = { "Common", "Uncommon", "Rare", "Epic", "Legendary" };
+        static readonly string[] RarityNames = { "Common Slime 1", "Common Slime 2", "Common Slime 3", "Common Slime 4", "Common Slime 5" };
         static readonly Color[] RarityCols = {
             new Color(0.62f, 0.65f, 0.70f), new Color(0.35f, 0.82f, 0.40f), new Color(0.28f, 0.55f, 1f),
             new Color(0.70f, 0.35f, 1f), new Color(1f, 0.80f, 0.16f)
@@ -72,7 +74,7 @@ namespace SlimeRPG.EditorTools
             BuildTopBar(root, out Text goldText, out Text luckText);
             BuildStageTitle(root, out Text stageNumText);
             var dots = BuildProgressRoad(root);
-            BuildBottomSection(root, out Button diceBtn, out Image diceImg, out Image cooldownOverlay, out Button invBtn, out Button skillsBtn, out Image[] slotMini, out GameObject[] slotLock);
+            BuildBottomSection(root, out Button diceBtn, out Image diceImg, out Image cooldownOverlay, out Button invBtn, out Button skillsBtn, out Image[] slotMini, out GameObject[] slotLock, out Button[] slotButtons, out Text[] slotButtonLabels, out GameObject[] slotCoins, out Text[] slotCostLabels, out DiceSpinner diceSpinner, out GameObject[] streakCubes);
             BuildPullPopup(root, out Text popupName, out Text popupChance, out GameObject popupRoot);
             var invUI = BuildInventoryPanel(root, out GameObject invPanel, out Button invClose);
             BuildSkillTreePanel(root, out GameObject skillsPanel, out Button skillsClose, out SkillNode[] skillNodes);
@@ -88,6 +90,10 @@ namespace SlimeRPG.EditorTools
             roller.popupChanceText = popupChance;
             roller.popupRoot = popupRoot;
             roller.cooldownOverlay = cooldownOverlay;
+            roller.streakCubes = streakCubes;
+            roller.diceSpinner = diceSpinner;
+            roller.rollLabel = GameObject.Find("RollLabel"); // "TAP TO ROLL" — hidden after first roll
+            diceSpinner.SetFace(5); // show a default face at rest
             invUI.roller = roller;
 
             var nav = gm.AddComponent<ScreenNav>();
@@ -109,11 +115,19 @@ namespace SlimeRPG.EditorTools
             team.heroContainer = heroContainer;
             team.slotMini = slotMini;
             team.slotLock = slotLock;
-            team.unlockedSlots = 2;
+            team.slotButtons = slotButtons;
+            team.slotButtonLabels = slotButtonLabels;
+            team.slotCoinIcons = slotCoins;
+            team.slotCostLabels = slotCostLabels;
+            team.unlockedSlots = 1;
+            team.inventoryPanel = invPanel;
+            team.skillsPanel = skillsPanel;
+            team.skillStartNode = skillNodes.Length > 0 ? skillNodes[0] : null; // tree centre
+            team.heroSlotNode = skillNodes.Length > 1 ? skillNodes[1] : null;   // Hero Slot
             invUI.team = team;
 
             // wire skill nodes to the live systems
-            foreach (var n in skillNodes) { n.roller = roller; n.combat = combat; n.team = team; n.RefreshVisual(); }
+            foreach (var n in skillNodes) { n.roller = roller; n.combat = combat; n.team = team; n.spinner = diceSpinner; n.RefreshVisual(); }
 
             // start at zero: no gold, no slimes, empty team
             roller.gold = 0; roller.UpdateGoldUI(); roller.UpdateLuckUI();
@@ -171,7 +185,7 @@ namespace SlimeRPG.EditorTools
             Stretch(world.rectTransform);
             var wt = world.transform;
 
-            const float groundH = 1190f; // raised ground (~62% of 1920)
+            const float groundH = 1380f; // raised ground/horizon higher (more visible field above the tall bottom UI)
             var ground = MakeImage("Ground", wt, GroundCol);
             var gr = ground.rectTransform; gr.anchorMin = new Vector2(0, 0); gr.anchorMax = new Vector2(1, 0); gr.pivot = new Vector2(0.5f, 0);
             gr.sizeDelta = new Vector2(0, groundH); gr.anchoredPosition = Vector2.zero;
@@ -180,14 +194,17 @@ namespace SlimeRPG.EditorTools
             hr.sizeDelta = new Vector2(0, 5); hr.anchoredPosition = new Vector2(0, groundH);
 
             // heroes (left) and enemies (right) are spawned at runtime by TeamManager / CombatManager.
+            // Containers are shifted UP so the formation lands in the middle of the visible ground band
+            // (above the tall bottom UI), not behind it.
+            const float combatLift = 270f;
             var hc = new GameObject("HeroContainer", typeof(RectTransform));
             hc.transform.SetParent(wt, false);
-            Stretch(hc.GetComponent<RectTransform>());
+            var hcr = hc.GetComponent<RectTransform>(); hcr.anchorMin = Vector2.zero; hcr.anchorMax = Vector2.one; hcr.offsetMin = new Vector2(0, combatLift); hcr.offsetMax = new Vector2(0, combatLift);
             heroContainer = hc.transform;
 
             var ec = new GameObject("EnemyContainer", typeof(RectTransform));
             ec.transform.SetParent(wt, false);
-            Stretch(ec.GetComponent<RectTransform>());
+            var ecr = ec.GetComponent<RectTransform>(); ecr.anchorMin = Vector2.zero; ecr.anchorMax = Vector2.one; ecr.offsetMin = new Vector2(0, combatLift); ecr.offsetMax = new Vector2(0, combatLift);
             return ec.transform;
         }
 
@@ -212,42 +229,58 @@ namespace SlimeRPG.EditorTools
 
         static void BuildTopBar(Transform root, out Text goldText, out Text luckText)
         {
-            var topBar = MakeImage("TopBar", root, PanelDark);
-            AnchorTop(topBar.rectTransform, 150, 0);
+            // 3 smaller rounded fields floating over the sky (no full-width bar) — Gold | Gems | Luck
+            const float fieldH = 74f, sideW = 244f, midW = 196f, topY = -22f;
 
-            var goldPill = MakePanel("GoldPill", topBar.transform, PanelDark2);
-            var gp = goldPill.rectTransform; gp.anchorMin = gp.anchorMax = new Vector2(0, 0.5f); gp.pivot = new Vector2(0, 0.5f);
-            gp.sizeDelta = new Vector2(340, 92); gp.anchoredPosition = new Vector2(36, 0);
-            var icon = MakeCircle("GoldIcon", goldPill.transform, GoldCol);
-            var ic = icon.rectTransform; ic.anchorMin = ic.anchorMax = new Vector2(0, 0.5f); ic.pivot = new Vector2(0, 0.5f);
-            ic.sizeDelta = new Vector2(54, 54); ic.anchoredPosition = new Vector2(24, 0);
-            goldText = MakeText("GoldText", goldPill.transform, "0", 40, GoldCol, TextAnchor.MiddleLeft);
+            // Gold (left)
+            var goldField = MakeRounded("GoldField", root, PanelDark2);
+            var gf = goldField.rectTransform; gf.anchorMin = gf.anchorMax = new Vector2(0, 1); gf.pivot = new Vector2(0, 1);
+            gf.sizeDelta = new Vector2(sideW, fieldH); gf.anchoredPosition = new Vector2(26, topY);
+            var gicon = MakeCircle("GoldIcon", goldField.transform, GoldCol);
+            var gic = gicon.rectTransform; gic.anchorMin = gic.anchorMax = new Vector2(0, 0.5f); gic.pivot = new Vector2(0, 0.5f);
+            gic.sizeDelta = new Vector2(42, 42); gic.anchoredPosition = new Vector2(18, 0);
+            goldText = MakeText("GoldText", goldField.transform, "0", 34, GoldCol, TextAnchor.MiddleLeft);
             var gt = goldText.rectTransform; gt.anchorMin = Vector2.zero; gt.anchorMax = Vector2.one;
-            gt.offsetMin = new Vector2(94, 0); gt.offsetMax = new Vector2(-16, 0);
+            gt.offsetMin = new Vector2(74, 0); gt.offsetMax = new Vector2(-12, 0);
 
-            var luckPill = MakePanel("LuckPill", topBar.transform, PanelDark2);
-            var lp = luckPill.rectTransform; lp.anchorMin = lp.anchorMax = new Vector2(1, 0.5f); lp.pivot = new Vector2(1, 0.5f);
-            lp.sizeDelta = new Vector2(300, 92); lp.anchoredPosition = new Vector2(-36, 0);
-            luckText = MakeText("LuckText", luckPill.transform, "Luck 1x", 38, Forest, TextAnchor.MiddleCenter);
+            // Gems (center) — a small diamond (rotated square) + count
+            var gemField = MakeRounded("GemField", root, PanelDark2);
+            var gmf = gemField.rectTransform; gmf.anchorMin = gmf.anchorMax = new Vector2(0.5f, 1); gmf.pivot = new Vector2(0.5f, 1);
+            gmf.sizeDelta = new Vector2(midW, fieldH); gmf.anchoredPosition = new Vector2(0, topY);
+            var gem = MakePanel("GemIcon", gemField.transform, GemCol);
+            var gemr = gem.rectTransform; gemr.anchorMin = gemr.anchorMax = new Vector2(0, 0.5f); gemr.pivot = new Vector2(0.5f, 0.5f); // centre pivot so the 45° rotation stays vertically centred
+            gemr.sizeDelta = new Vector2(34, 34); gemr.anchoredPosition = new Vector2(38, 0); gem.transform.localRotation = Quaternion.Euler(0, 0, 45);
+            var gemText = MakeText("GemText", gemField.transform, "0", 34, GemCol, TextAnchor.MiddleLeft);
+            var gmt = gemText.rectTransform; gmt.anchorMin = Vector2.zero; gmt.anchorMax = Vector2.one;
+            gmt.offsetMin = new Vector2(72, 0); gmt.offsetMax = new Vector2(-12, 0);
+
+            // Luck (right)
+            var luckField = MakeRounded("LuckField", root, PanelDark2);
+            var lp = luckField.rectTransform; lp.anchorMin = lp.anchorMax = new Vector2(1, 1); lp.pivot = new Vector2(1, 1);
+            lp.sizeDelta = new Vector2(sideW, fieldH); lp.anchoredPosition = new Vector2(-26, topY);
+            luckText = MakeText("LuckText", luckField.transform, "Luck 1x", 32, Forest, TextAnchor.MiddleCenter);
             Stretch(luckText.rectTransform);
         }
 
-        // ================= stage title badge =================
+        // ================= stage title (no background, bold + outlined, lifted) =================
 
         static void BuildStageTitle(Transform root, out Text stageNumText)
         {
-            var badge = MakePanel("StageTitle", root, new Color(0.10f, 0.12f, 0.16f, 0.94f));
-            var br = badge.rectTransform; br.anchorMin = br.anchorMax = new Vector2(0.5f, 1); br.pivot = new Vector2(0.5f, 1);
-            br.sizeDelta = new Vector2(440, 158); br.anchoredPosition = new Vector2(0, -166);
+            var holder = new GameObject("StageTitle", typeof(RectTransform));
+            holder.transform.SetParent(root, false);
+            var br = holder.GetComponent<RectTransform>(); br.anchorMin = br.anchorMax = new Vector2(0.5f, 1); br.pivot = new Vector2(0.5f, 1);
+            br.sizeDelta = new Vector2(620, 150); br.anchoredPosition = new Vector2(0, -116);
 
-            var s1 = MakeText("StageNum", badge.transform, "Stage 1", 56, TextCol, TextAnchor.MiddleCenter);
+            var s1 = MakeText("StageNum", holder.transform, "Stage 1", 66, TextCol, TextAnchor.MiddleCenter);
+            BoldOutline(s1, 3);
             stageNumText = s1;
             var s1r = s1.rectTransform; s1r.anchorMin = new Vector2(0, 1); s1r.anchorMax = new Vector2(1, 1); s1r.pivot = new Vector2(0.5f, 1);
-            s1r.sizeDelta = new Vector2(-24, 88); s1r.anchoredPosition = new Vector2(0, -14);
+            s1r.sizeDelta = new Vector2(-24, 90); s1r.anchoredPosition = new Vector2(0, 0);
 
-            var zn = MakeText("ZoneName", badge.transform, "Forest", 34, Forest, TextAnchor.MiddleCenter);
+            var zn = MakeText("ZoneName", holder.transform, "Forest", 42, Forest, TextAnchor.MiddleCenter);
+            BoldOutline(zn, 3);
             var znr = zn.rectTransform; znr.anchorMin = new Vector2(0, 0); znr.anchorMax = new Vector2(1, 0); znr.pivot = new Vector2(0.5f, 0);
-            znr.sizeDelta = new Vector2(-24, 56); znr.anchoredPosition = new Vector2(0, 16);
+            znr.sizeDelta = new Vector2(-24, 56); znr.anchoredPosition = new Vector2(0, 6);
         }
 
         // ================= progress road (no border) =================
@@ -257,7 +290,7 @@ namespace SlimeRPG.EditorTools
             var prog = new GameObject("ProgressRoad", typeof(RectTransform));
             prog.transform.SetParent(root, false);
             var pr = prog.GetComponent<RectTransform>(); pr.anchorMin = new Vector2(0, 1); pr.anchorMax = new Vector2(1, 1); pr.pivot = new Vector2(0.5f, 1);
-            pr.sizeDelta = new Vector2(0, 100); pr.anchoredPosition = new Vector2(0, -360);
+            pr.sizeDelta = new Vector2(0, 100); pr.anchoredPosition = new Vector2(0, -258);
             var pt = prog.transform;
 
             var line = MakeImage("Road", pt, RoadCol);
@@ -282,122 +315,236 @@ namespace SlimeRPG.EditorTools
             return dots;
         }
 
-        // ================= bottom section (dice + team row + 5 nav buttons) =================
+        // ===== bottom: fixed navbar + scrollable 7-slot slime roster + dice dome =====
 
-        static void BuildBottomSection(Transform root, out Button diceBtn, out Image diceImg, out Image cooldownOverlay, out Button invBtn, out Button skillsBtn, out Image[] slotMini, out GameObject[] slotLock)
+        static void BuildBottomSection(Transform root, out Button diceBtn, out Image diceImg, out Image cooldownOverlay, out Button invBtn, out Button skillsBtn, out Image[] slotMini, out GameObject[] slotLock, out Button[] slotButtons, out Text[] slotButtonLabels, out GameObject[] slotCoins, out Text[] slotCostLabels, out DiceSpinner diceSpinner, out GameObject[] streakCubes)
         {
-            const float secH = 414f;
-            var outer = MakePanel("BottomSection", root, BorderCol);
-            var oRt = outer.rectTransform; oRt.anchorMin = new Vector2(0, 0); oRt.anchorMax = new Vector2(1, 0); oRt.pivot = new Vector2(0.5f, 0);
-            oRt.sizeDelta = new Vector2(0, secH); oRt.anchoredPosition = Vector2.zero;
-            var fill = MakePanel("Fill", outer.transform, PanelDark);
-            var fRt = fill.rectTransform; fRt.anchorMin = Vector2.zero; fRt.anchorMax = Vector2.one;
-            fRt.offsetMin = new Vector2(Border, Border); fRt.offsetMax = new Vector2(-Border, -Border);
-            fill.raycastTarget = false;
-            var sec = fill.transform;
+            const int SLOTS = 7;
+            Color cellFill = new Color(0.13f, 0.15f, 0.18f, 1f);
 
-            // shared 5-column grid
-            int cols = 5; float colW = 200f, colGap = 10f;
-            float gridW = cols * colW + (cols - 1) * colGap;
-            float gx = -gridW / 2f + colW / 2f;
+            // ---------- fixed bottom navbar (Battle in the middle) ----------
+            float navH = 156f;
+            var navBar = MakePanel("NavBar", root, PanelDark);
+            var nbr = navBar.rectTransform; nbr.anchorMin = new Vector2(0, 0); nbr.anchorMax = new Vector2(1, 0); nbr.pivot = new Vector2(0.5f, 0);
+            nbr.sizeDelta = new Vector2(0, navH); nbr.anchoredPosition = Vector2.zero;
+            var navTop = MakeImage("TopLine", navBar.transform, BorderCol);
+            var ntr = navTop.rectTransform; ntr.anchorMin = new Vector2(0, 1); ntr.anchorMax = new Vector2(1, 1); ntr.pivot = new Vector2(0.5f, 1);
+            ntr.sizeDelta = new Vector2(0, 6); ntr.anchoredPosition = Vector2.zero; navTop.raycastTarget = false;
 
-            // 5 nav buttons stuck to the bottom
-            string[] navNames = { "Battle", "Inventory", "Collection", "Upgrades", "Skill Tree" };
+            string[] navNames = { "Collection", "Upgrades", "Battle", "Inventory", "Skill Tree" };
+            Color battleCol = new Color(0.24f, 0.42f, 0.28f, 1f);
             var navBtns = new Button[5];
             for (int i = 0; i < 5; i++)
             {
-                var b = MakePanel("Nav_" + navNames[i].Replace(" ", ""), sec, PanelDark2);
-                var r = b.rectTransform; r.anchorMin = r.anchorMax = new Vector2(0.5f, 0); r.pivot = new Vector2(0.5f, 0);
-                r.sizeDelta = new Vector2(colW, 106); r.anchoredPosition = new Vector2(gx + i * (colW + colGap), 8);
+                bool isBattle = (i == 2);
+                var b = MakeImage("Nav_" + navNames[i].Replace(" ", ""), navBar.transform, isBattle ? battleCol : PanelDark2);
+                var r = b.rectTransform; r.anchorMin = new Vector2(i / 5f, 0); r.anchorMax = new Vector2((i + 1) / 5f, 1);
+                r.offsetMin = new Vector2(0, 0); r.offsetMax = new Vector2(0, -6); // flush, no gaps (top 6 = the border line)
                 var bt = b.gameObject.AddComponent<Button>(); bt.targetGraphic = b; navBtns[i] = bt;
-                var lab = MakeText("Label", b.transform, navNames[i], 26, TextCol, TextAnchor.MiddleCenter);
-                Stretch(lab.rectTransform);
+                var lab = MakeText("Label", b.transform, navNames[i], isBattle ? 30 : 25, isBattle ? Color.white : TextCol, TextAnchor.MiddleCenter);
+                lab.raycastTarget = false; if (isBattle) lab.fontStyle = FontStyle.Bold; Stretch(lab.rectTransform);
             }
-            invBtn = navBtns[1]; skillsBtn = navBtns[4];
-
-            // per-slot upgrade buttons, just below the team slots
-            for (int i = 0; i < 5; i++)
+            // thin vertical borders between the (now flush) buttons
+            for (int i = 1; i < 5; i++)
             {
-                var u = MakePanel("Upgrade_" + (i + 1), sec, new Color(0.20f, 0.32f, 0.22f, 1f));
-                var ur = u.rectTransform; ur.anchorMin = ur.anchorMax = new Vector2(0.5f, 0); ur.pivot = new Vector2(0.5f, 0);
-                ur.sizeDelta = new Vector2(colW, 72); ur.anchoredPosition = new Vector2(gx + i * (colW + colGap), 124);
-                u.gameObject.AddComponent<Button>().targetGraphic = u;
-                var ul = MakeText("Label", u.transform, "Upgrade", 24, TextCol, TextAnchor.MiddleCenter);
-                Stretch(ul.rectTransform);
+                var div = MakeImage("Divider_" + i, navBar.transform, BorderCol);
+                var dvr = div.rectTransform; dvr.anchorMin = new Vector2(i / 5f, 0); dvr.anchorMax = new Vector2(i / 5f, 1);
+                dvr.pivot = new Vector2(0.5f, 0); dvr.sizeDelta = new Vector2(3, -6); dvr.anchoredPosition = new Vector2(0, 0);
+                div.raycastTarget = false;
             }
+            invBtn = navBtns[3]; skillsBtn = navBtns[4];
 
-            // current team: 5 slots full width, above the upgrade buttons (start empty; slots 3-5 locked)
-            slotMini = new Image[5]; slotLock = new GameObject[5];
-            for (int i = 0; i < 5; i++)
+            // ---------- scrollable slime roster (7 horizontal slot-rows) ----------
+            float rosterH = 720f;
+            var rosterOuter = MakePanel("RosterPanel", root, BorderCol);
+            var ror = rosterOuter.rectTransform; ror.anchorMin = new Vector2(0, 0); ror.anchorMax = new Vector2(1, 0); ror.pivot = new Vector2(0.5f, 0);
+            ror.sizeDelta = new Vector2(0, rosterH); ror.anchoredPosition = new Vector2(0, navH);
+            var rosterFill = MakePanel("Fill", rosterOuter.transform, PanelDark);
+            var rfr = rosterFill.rectTransform; rfr.anchorMin = Vector2.zero; rfr.anchorMax = Vector2.one; rfr.offsetMin = new Vector2(Border, Border); rfr.offsetMax = new Vector2(-Border, -Border);
+            rosterFill.raycastTarget = false;
+
+            var scroll = rosterOuter.gameObject.AddComponent<ScrollRect>();
+            scroll.horizontal = false; scroll.vertical = true; scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.inertia = true; scroll.decelerationRate = 0.135f; scroll.scrollSensitivity = 20f;
+
+            var viewportGO = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(RectMask2D));
+            viewportGO.transform.SetParent(rosterFill.transform, false);
+            var vp = viewportGO.GetComponent<RectTransform>(); vp.anchorMin = Vector2.zero; vp.anchorMax = Vector2.one; vp.offsetMin = new Vector2(8, 8); vp.offsetMax = new Vector2(-8, -8);
+            viewportGO.GetComponent<Image>().color = new Color(0, 0, 0, 0.0015f); // near-invisible, just catches drag
+            scroll.viewport = vp;
+
+            var contentGO = new GameObject("Content", typeof(RectTransform));
+            contentGO.transform.SetParent(viewportGO.transform, false);
+            var content = contentGO.GetComponent<RectTransform>(); content.anchorMin = new Vector2(0, 1); content.anchorMax = new Vector2(1, 1); content.pivot = new Vector2(0.5f, 1);
+            float rowH = 150f, rowGap = 12f;
+            content.sizeDelta = new Vector2(0, rowGap + SLOTS * (rowH + rowGap)); content.anchoredPosition = Vector2.zero;
+            scroll.content = content;
+
+            slotMini = new Image[SLOTS]; slotLock = new GameObject[SLOTS]; slotButtons = new Button[SLOTS]; slotButtonLabels = new Text[SLOTS];
+            slotCoins = new GameObject[SLOTS]; slotCostLabels = new Text[SLOTS];
+            for (int i = 0; i < SLOTS; i++)
             {
-                var slot = MakePanel("Slot_" + (i + 1), sec, new Color(0.13f, 0.15f, 0.18f, 1f));
-                var s = slot.rectTransform; s.anchorMin = s.anchorMax = new Vector2(0.5f, 0); s.pivot = new Vector2(0.5f, 0);
-                s.sizeDelta = new Vector2(colW, 150); s.anchoredPosition = new Vector2(gx + i * (colW + colGap), 206);
+                float y = -rowGap - i * (rowH + rowGap);
+                var rowOuter = MakePanel("Row_" + (i + 1), content, BorderCol);
+                var rrt = rowOuter.rectTransform; rrt.anchorMin = new Vector2(0, 1); rrt.anchorMax = new Vector2(1, 1); rrt.pivot = new Vector2(0.5f, 1);
+                rrt.sizeDelta = new Vector2(-16, rowH); rrt.anchoredPosition = new Vector2(0, y);
+                var rowFill = MakePanel("Fill", rowOuter.transform, cellFill);
+                var rfill = rowFill.rectTransform; rfill.anchorMin = Vector2.zero; rfill.anchorMax = Vector2.one; rfill.offsetMin = new Vector2(4, 4); rfill.offsetMax = new Vector2(-4, -4);
+                rowFill.raycastTarget = false;
 
-                var mini = MakeCircle("Mini", slot.transform, RarityCols[0]);
-                var m = mini.rectTransform; m.anchorMin = m.anchorMax = new Vector2(0.5f, 0.5f); m.pivot = new Vector2(0.5f, 0.5f);
-                m.sizeDelta = new Vector2(96, 96); m.anchoredPosition = Vector2.zero;
-                mini.gameObject.SetActive(false); // no slime yet
+                // left: slime icon
+                var mini = MakeCircle("Mini", rowFill.transform, RarityCols[0]);
+                var mr = mini.rectTransform; mr.anchorMin = mr.anchorMax = new Vector2(0, 0.5f); mr.pivot = new Vector2(0, 0.5f);
+                mr.sizeDelta = new Vector2(104, 104); mr.anchoredPosition = new Vector2(24, 0);
+                mini.raycastTarget = false; mini.gameObject.SetActive(false);
                 slotMini[i] = mini;
 
-                var lockOv = MakePanel("Lock", slot.transform, new Color(0.07f, 0.08f, 0.10f, 0.96f));
-                var lk = lockOv.rectTransform; lk.anchorMin = Vector2.zero; lk.anchorMax = Vector2.one; lk.offsetMin = Vector2.zero; lk.offsetMax = Vector2.zero;
-                var lkTxt = MakeText("LockText", lockOv.transform, "Locked", 24, SubTextCol, TextAnchor.MiddleCenter);
+                // level + ability slots
+                var lvl = MakeText("Level", rowFill.transform, "Lv 1", 28, TextCol, TextAnchor.MiddleLeft);
+                lvl.raycastTarget = false;
+                var lvr = lvl.rectTransform; lvr.anchorMin = lvr.anchorMax = new Vector2(0, 1); lvr.pivot = new Vector2(0, 1);
+                lvr.sizeDelta = new Vector2(170, 40); lvr.anchoredPosition = new Vector2(150, -22);
+                for (int a = 0; a < 3; a++)
+                {
+                    var ab = MakePanel("Ability_" + a, rowFill.transform, new Color(0.10f, 0.11f, 0.14f, 1f));
+                    var abr = ab.rectTransform; abr.anchorMin = abr.anchorMax = new Vector2(0, 0); abr.pivot = new Vector2(0, 0);
+                    abr.sizeDelta = new Vector2(48, 48); abr.anchoredPosition = new Vector2(150 + a * 58, 22);
+                    ab.raycastTarget = false;
+                    var abIn = MakePanel("In", ab.transform, new Color(0.17f, 0.19f, 0.23f, 1f));
+                    var abinr = abIn.rectTransform; abinr.anchorMin = Vector2.zero; abinr.anchorMax = Vector2.one; abinr.offsetMin = new Vector2(3, 3); abinr.offsetMax = new Vector2(-3, -3);
+                    abIn.raycastTarget = false;
+                }
+
+                // right: Slot Upgrade / Unlock button
+                var btnPanel = MakePanel("SlotButton", rowFill.transform, new Color(0.28f, 0.42f, 0.58f, 1f));
+                var bpr = btnPanel.rectTransform; bpr.anchorMin = bpr.anchorMax = new Vector2(1, 0.5f); bpr.pivot = new Vector2(1, 0.5f);
+                bpr.sizeDelta = new Vector2(220, 96); bpr.anchoredPosition = new Vector2(-20, 0);
+                var sbtn = btnPanel.gameObject.AddComponent<Button>(); sbtn.targetGraphic = btnPanel; slotButtons[i] = sbtn;
+                var sblab = MakeText("Label", btnPanel.transform, "Upgrade", 26, Color.white, TextAnchor.MiddleCenter);
+                sblab.raycastTarget = false;
+                var sblr = sblab.rectTransform; sblr.anchorMin = Vector2.zero; sblr.anchorMax = Vector2.one; sblr.offsetMin = new Vector2(0, 30); sblr.offsetMax = Vector2.zero; // upper area
+                slotButtonLabels[i] = sblab;
+                // gold coin + cost (shown only in the Upgrade state)
+                var coin = MakeCircle("Coin", btnPanel.transform, GoldCol); coin.raycastTarget = false;
+                var coinR = coin.rectTransform; coinR.anchorMin = coinR.anchorMax = new Vector2(0.5f, 0); coinR.pivot = new Vector2(0.5f, 0.5f);
+                coinR.sizeDelta = new Vector2(26, 26); coinR.anchoredPosition = new Vector2(-30, 18);
+                slotCoins[i] = coin.gameObject;
+                var cost = MakeText("Cost", btnPanel.transform, "100", 24, GoldCol, TextAnchor.MiddleLeft); cost.raycastTarget = false;
+                var costR = cost.rectTransform; costR.anchorMin = costR.anchorMax = new Vector2(0.5f, 0); costR.pivot = new Vector2(0, 0.5f);
+                costR.sizeDelta = new Vector2(80, 30); costR.anchoredPosition = new Vector2(-10, 18);
+                slotCostLabels[i] = cost;
+
+                // lock overlay over the left content (button column stays clear)
+                var lockOv = MakePanel("Lock", rowFill.transform, new Color(0.07f, 0.08f, 0.10f, 0.94f));
+                var lkr = lockOv.rectTransform; lkr.anchorMin = Vector2.zero; lkr.anchorMax = Vector2.one; lkr.offsetMin = Vector2.zero; lkr.offsetMax = new Vector2(-252, 0);
+                var lkTxt = MakeText("LockText", lockOv.transform, "Locked", 30, SubTextCol, TextAnchor.MiddleCenter);
                 Stretch(lkTxt.rectTransform);
-                lockOv.gameObject.SetActive(i >= 2); // first 2 slots unlocked
+                lockOv.gameObject.SetActive(i >= 1); // only slot 1 unlocked at start
                 slotLock[i] = lockOv.gameObject;
             }
 
-            // dice: centred, sits above the section, dips ~20% into its top edge (matching border)
-            var frame = MakePanel("DiceFrame", outer.transform, BorderCol);
-            var dfr = frame.rectTransform; dfr.anchorMin = dfr.anchorMax = new Vector2(0.5f, 1); dfr.pivot = new Vector2(0.5f, 0);
-            dfr.sizeDelta = new Vector2(206, 206); dfr.anchoredPosition = new Vector2(0, -42);
-            var dice = MakePanel("DiceButton", frame.transform, DiceCol);
-            var dr = dice.rectTransform; dr.anchorMin = Vector2.zero; dr.anchorMax = Vector2.one;
-            dr.offsetMin = new Vector2(Border, Border); dr.offsetMax = new Vector2(-Border, -Border);
+            // ---------- dice dome: narrower + pointier (half-ellipse), still holds the whole cube, seamless ----------
+            float domeW = 290f, domeH = 235f, diceD = 158f, diceCY = 98f;
+            var dome = MakeImage("DiceDome", rosterOuter.transform, PanelDark); // PanelDark only → no border, seamless bump
+            dome.sprite = GetDomeSprite(); dome.type = Image.Type.Simple; dome.raycastTarget = false;
+            var doR = dome.rectTransform; doR.anchorMin = doR.anchorMax = new Vector2(0.5f, 1); doR.pivot = new Vector2(0.5f, 0);
+            doR.sizeDelta = new Vector2(domeW, domeH); doR.anchoredPosition = new Vector2(0, -4);
+
+            // the rolling cube (white die face + 7 pips); tumbled by DiceSpinner on each roll
+            var dice = MakePanel("DiceButton", rosterOuter.transform, DiceCol);
+            var dr = dice.rectTransform; dr.anchorMin = dr.anchorMax = new Vector2(0.5f, 1); dr.pivot = new Vector2(0.5f, 0.5f);
+            dr.sizeDelta = new Vector2(diceD, diceD); dr.anchoredPosition = new Vector2(0, diceCY);
             diceImg = dice;
             diceBtn = dice.gameObject.AddComponent<Button>();
             diceBtn.transition = Selectable.Transition.None; diceBtn.targetGraphic = dice;
+            var blur = dice.gameObject.AddComponent<CanvasGroup>();
+            diceSpinner = dice.gameObject.AddComponent<DiceSpinner>();
+            diceSpinner.target = dice.rectTransform; diceSpinner.spinDuration = 2f; diceSpinner.blurGroup = blur;
 
+            // 7 pips in die-face order: 0=TL 1=TR 2=ML 3=MR 4=BL 5=BR 6=C — DiceSpinner toggles subsets per face
             Color pipCol = new Color(0.16f, 0.17f, 0.21f, 1f);
-            float d = 46f, pip = 28f;
-            Vector2[] pipPos = { new Vector2(0, 0), new Vector2(-d, d), new Vector2(d, d), new Vector2(-d, -d), new Vector2(d, -d) };
-            foreach (var pp in pipPos)
+            float o = diceD * 0.26f, pip = diceD * 0.15f;
+            Vector2[] pipPos = {
+                new Vector2(-o,  o), new Vector2(o,  o), new Vector2(-o, 0), new Vector2(o, 0),
+                new Vector2(-o, -o), new Vector2(o, -o), new Vector2(0, 0)
+            };
+            var facePips = new Image[7];
+            for (int i = 0; i < 7; i++)
             {
-                var pipImg = MakeCircle("Pip", dice.transform, pipCol);
+                var pipImg = MakeCircle("Pip" + i, dice.transform, pipCol); pipImg.raycastTarget = false;
                 var prc = pipImg.rectTransform; prc.anchorMin = prc.anchorMax = new Vector2(0.5f, 0.5f); prc.pivot = new Vector2(0.5f, 0.5f);
-                prc.sizeDelta = new Vector2(pip, pip); prc.anchoredPosition = pp;
+                prc.sizeDelta = new Vector2(pip, pip); prc.anchoredPosition = pipPos[i];
+                facePips[i] = pipImg;
             }
+            diceSpinner.facePips = facePips;
 
-            // cooldown overlay (radial wipe over the dice); fill 1 = cooling, 0 = ready
-            var cd = MakeCircle("Cooldown", dice.transform, new Color(0f, 0f, 0f, 0.55f));
-            var cdr = cd.rectTransform; cdr.anchorMin = Vector2.zero; cdr.anchorMax = Vector2.one; cdr.offsetMin = Vector2.zero; cdr.offsetMax = Vector2.zero;
+            // cooldown overlay — sibling of the cube (in front), does NOT tumble with it
+            var cd = MakeCircle("Cooldown", rosterOuter.transform, new Color(0f, 0f, 0f, 0.55f));
+            var cdr = cd.rectTransform; cdr.anchorMin = cdr.anchorMax = new Vector2(0.5f, 1); cdr.pivot = new Vector2(0.5f, 0.5f);
+            cdr.sizeDelta = new Vector2(diceD, diceD); cdr.anchoredPosition = new Vector2(0, diceCY);
             cd.type = Image.Type.Filled; cd.fillMethod = Image.FillMethod.Radial360; cd.fillOrigin = (int)Image.Origin360.Top; cd.fillClockwise = true;
             cd.fillAmount = 0f; cd.raycastTarget = false;
             cooldownOverlay = cd;
 
-            var roll = MakeText("RollLabel", outer.transform, "TAP TO ROLL", 26, TextCol, TextAnchor.MiddleCenter);
+            // orbit streak-cubes (Gold / Platinum / Diamond) on the dome crown; hidden until unlocked
+            Color[] streakCols = { new Color(1f, 0.84f, 0.25f), new Color(0.82f, 0.85f, 0.90f), new Color(0.55f, 0.86f, 0.96f) };
+            string[] streakNames = { "Gold", "Platinum", "Diamond" };
+            float[] streakAng = { 142f, 90f, 38f };
+            float cubeSz = 42f, ellAx = domeW / 2f - 24f, ellBy = domeH - 30f; // ride the half-ellipse arc
+            streakCubes = new GameObject[3];
+            for (int i = 0; i < 3; i++)
+            {
+                var scOuter = MakePanel("Streak_" + streakNames[i], dome.transform, BorderCol);
+                var scr = scOuter.rectTransform; scr.anchorMin = scr.anchorMax = new Vector2(0.5f, 0); scr.pivot = new Vector2(0.5f, 0.5f);
+                scr.sizeDelta = new Vector2(cubeSz, cubeSz);
+                float a = streakAng[i] * Mathf.Deg2Rad;
+                scr.anchoredPosition = new Vector2(Mathf.Cos(a) * ellAx, Mathf.Sin(a) * ellBy);
+                var scFill = MakePanel("Fill", scOuter.transform, streakCols[i]);
+                var scfr = scFill.rectTransform; scfr.anchorMin = Vector2.zero; scfr.anchorMax = Vector2.one;
+                scfr.offsetMin = new Vector2(4, 4); scfr.offsetMax = new Vector2(-4, -4);
+                scOuter.gameObject.SetActive(false);
+                streakCubes[i] = scOuter.gameObject;
+            }
+
+            var roll = MakeText("RollLabel", rosterOuter.transform, "TAP TO ROLL", 26, TextCol, TextAnchor.MiddleCenter);
             var rr = roll.rectTransform; rr.anchorMin = rr.anchorMax = new Vector2(0.5f, 1); rr.pivot = new Vector2(0.5f, 0);
-            rr.sizeDelta = new Vector2(360, 40); rr.anchoredPosition = new Vector2(0, 172);
+            rr.sizeDelta = new Vector2(360, 40); rr.anchoredPosition = new Vector2(0, domeH + 6);
+        }
+
+        /// <summary>Bordered panel: a BorderCol outer frame + an inset coloured fill (bottom-anchored grid cell).
+        /// Returns the fill (parent children to it); outputs the outer image (use as the Button target).</summary>
+        static Image MakeBordered(string name, Transform parent, Vector2 anchoredPos, Vector2 size, Color fillColor, out Image outer, float border = 4f)
+        {
+            outer = MakePanel(name, parent, BorderCol);
+            var oR = outer.rectTransform; oR.anchorMin = oR.anchorMax = new Vector2(0.5f, 0); oR.pivot = new Vector2(0.5f, 0);
+            oR.sizeDelta = size; oR.anchoredPosition = anchoredPos;
+            var f = MakePanel("Fill", outer.transform, fillColor);
+            var fR = f.rectTransform; fR.anchorMin = Vector2.zero; fR.anchorMax = Vector2.one;
+            fR.offsetMin = new Vector2(border, border); fR.offsetMax = new Vector2(-border, -border);
+            f.raycastTarget = false;
+            return f;
         }
 
         // ================= pull popup =================
 
         static void BuildPullPopup(Transform root, out Text nameText, out Text chanceText, out GameObject popupRoot)
         {
-            var bgp = MakePanel("PullPopup", root, new Color(0.10f, 0.11f, 0.14f, 0.92f));
-            var p = bgp.rectTransform; p.anchorMin = p.anchorMax = new Vector2(0.5f, 1); p.pivot = new Vector2(0.5f, 1);
-            p.sizeDelta = new Vector2(760, 170); p.anchoredPosition = new Vector2(0, -520);
-            bgp.gameObject.AddComponent<CanvasGroup>();
-            popupRoot = bgp.gameObject;
+            // no background/border — just bold outlined text over the sky: name on top, chance below
+            var holder = new GameObject("PullPopup", typeof(RectTransform), typeof(CanvasGroup));
+            holder.transform.SetParent(root, false);
+            var p = holder.GetComponent<RectTransform>(); p.anchorMin = p.anchorMax = new Vector2(0.5f, 1); p.pivot = new Vector2(0.5f, 1);
+            p.sizeDelta = new Vector2(860, 170); p.anchoredPosition = new Vector2(0, -470);
+            popupRoot = holder;
 
-            nameText = MakeText("PopupName", bgp.transform, "—", 50, TextCol, TextAnchor.MiddleCenter);
+            nameText = MakeText("PopupName", holder.transform, "—", 62, TextCol, TextAnchor.MiddleCenter);
+            BoldOutline(nameText, 3);
             var n = nameText.rectTransform; n.anchorMin = new Vector2(0, 1); n.anchorMax = new Vector2(1, 1); n.pivot = new Vector2(0.5f, 1);
-            n.sizeDelta = new Vector2(-30, 88); n.anchoredPosition = new Vector2(0, -18);
+            n.sizeDelta = new Vector2(-20, 96); n.anchoredPosition = new Vector2(0, 0);
 
-            chanceText = MakeText("PopupChance", bgp.transform, "", 30, SubTextCol, TextAnchor.MiddleCenter);
+            chanceText = MakeText("PopupChance", holder.transform, "", 46, TextCol, TextAnchor.MiddleCenter);
+            BoldOutline(chanceText, 3);
             var c = chanceText.rectTransform; c.anchorMin = new Vector2(0, 0); c.anchorMax = new Vector2(1, 0); c.pivot = new Vector2(0.5f, 0);
-            c.sizeDelta = new Vector2(-30, 54); c.anchoredPosition = new Vector2(0, 18);
+            c.sizeDelta = new Vector2(-20, 64); c.anchoredPosition = new Vector2(0, 8);
         }
 
         // ================= inventory =================
@@ -407,58 +554,150 @@ namespace SlimeRPG.EditorTools
             var panel = MakeImage("InventoryPanel", root, new Color(0, 0, 0, 0.66f));
             Stretch(panel.rectTransform);
             panelGO = panel.gameObject;
+            // render above the HP bars' override-sorting canvas (20) so bars don't bleed through this overlay
+            var icv = panelGO.AddComponent<Canvas>(); icv.overrideSorting = true; icv.sortingOrder = 30;
+            panelGO.AddComponent<GraphicRaycaster>();
             var ui = panelGO.AddComponent<InventoryUI>();
 
             var card = MakePanel("Card", panel.transform, PanelDark);
             var cr = card.rectTransform; cr.anchorMin = cr.anchorMax = new Vector2(0.5f, 0.5f); cr.pivot = new Vector2(0.5f, 0.5f);
-            cr.sizeDelta = new Vector2(940, 1320); cr.anchoredPosition = Vector2.zero;
-
-            var title = MakeText("Title", card.transform, "Inventory", 46, TextCol, TextAnchor.MiddleLeft);
-            var ti = title.rectTransform; ti.anchorMin = new Vector2(0, 1); ti.anchorMax = new Vector2(1, 1); ti.pivot = new Vector2(0.5f, 1);
-            ti.sizeDelta = new Vector2(-80, 90); ti.anchoredPosition = new Vector2(40, -30);
+            cr.sizeDelta = new Vector2(940, 1340); cr.anchoredPosition = Vector2.zero;
             closeBtn = MakeCloseButton(card.transform);
 
-            int n = RarityNames.Length;
-            var rowButtons = new Button[n]; var rowBgs = new Image[n]; var counts = new Text[n];
-            float rowW = 840, rowH = 140, startY = 460, stepY = 165;
-            for (int i = 0; i < n; i++)
+            Color cellBg = new Color(0.13f, 0.15f, 0.18f, 1f);
+            Color tabOn = new Color(0.28f, 0.42f, 0.58f, 1f), tabOff = new Color(0.16f, 0.18f, 0.22f, 1f);
+            Color scrollBg = new Color(0.09f, 0.10f, 0.13f, 1f);
+
+            // ----- tabs: Slimes | Items (left-anchored so the top-right corner stays free for the X) -----
+            var slimesTab = MakePanel("SlimesTab", card.transform, tabOn);
+            var st = slimesTab.rectTransform; st.anchorMin = st.anchorMax = new Vector2(0, 1); st.pivot = new Vector2(0, 1);
+            st.sizeDelta = new Vector2(360, 92); st.anchoredPosition = new Vector2(24, -24);
+            var slimesTabBtn = slimesTab.gameObject.AddComponent<Button>(); slimesTabBtn.targetGraphic = slimesTab;
+            var stl = MakeText("Label", slimesTab.transform, "Slimes", 36, Color.white, TextAnchor.MiddleCenter); stl.raycastTarget = false; Stretch(stl.rectTransform);
+
+            var itemsTab = MakePanel("ItemsTab", card.transform, tabOff);
+            var it = itemsTab.rectTransform; it.anchorMin = it.anchorMax = new Vector2(0, 1); it.pivot = new Vector2(0, 1);
+            it.sizeDelta = new Vector2(360, 92); it.anchoredPosition = new Vector2(400, -24);
+            var itemsTabBtn = itemsTab.gameObject.AddComponent<Button>(); itemsTabBtn.targetGraphic = itemsTab;
+            var itl = MakeText("Label", itemsTab.transform, "Items", 36, Color.white, TextAnchor.MiddleCenter); itl.raycastTarget = false; Stretch(itl.rectTransform);
+
+            // ----- panel containers (below tabs) -----
+            var slimesPanel = new GameObject("SlimesPanel", typeof(RectTransform));
+            slimesPanel.transform.SetParent(card.transform, false);
+            var sp = slimesPanel.GetComponent<RectTransform>(); sp.anchorMin = Vector2.zero; sp.anchorMax = Vector2.one; sp.offsetMin = new Vector2(24, 24); sp.offsetMax = new Vector2(-24, -140);
+
+            var itemsPanel = new GameObject("ItemsPanel", typeof(RectTransform));
+            itemsPanel.transform.SetParent(card.transform, false);
+            var ipr = itemsPanel.GetComponent<RectTransform>(); ipr.anchorMin = Vector2.zero; ipr.anchorMax = Vector2.one; ipr.offsetMin = new Vector2(24, 24); ipr.offsetMax = new Vector2(-24, -140);
+            var itemsMsg = MakeText("Msg", itemsPanel.transform, "No items yet", 40, SubTextCol, TextAnchor.MiddleCenter); Stretch(itemsMsg.rectTransform);
+            itemsPanel.SetActive(false);
+
+            // ===== equipped preview strip (horizontal scroll) =====
+            const int SLOTS = 7;
+            float slotW = 150f, slotGap = 12f;
+            var eqScrollGO = new GameObject("EquippedScroll", typeof(RectTransform), typeof(Image), typeof(ScrollRect));
+            eqScrollGO.transform.SetParent(slimesPanel.transform, false);
+            var eqs = eqScrollGO.GetComponent<RectTransform>(); eqs.anchorMin = new Vector2(0, 1); eqs.anchorMax = new Vector2(1, 1); eqs.pivot = new Vector2(0.5f, 1);
+            eqs.sizeDelta = new Vector2(0, 176); eqs.anchoredPosition = Vector2.zero;
+            eqScrollGO.GetComponent<Image>().color = scrollBg;
+            var eqScroll = eqScrollGO.GetComponent<ScrollRect>(); eqScroll.horizontal = true; eqScroll.vertical = false; eqScroll.movementType = ScrollRect.MovementType.Clamped; eqScroll.scrollSensitivity = 20f;
+            var eqViewGO = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(RectMask2D));
+            eqViewGO.transform.SetParent(eqScrollGO.transform, false);
+            var eqv = eqViewGO.GetComponent<RectTransform>(); eqv.anchorMin = Vector2.zero; eqv.anchorMax = Vector2.one; eqv.offsetMin = new Vector2(8, 8); eqv.offsetMax = new Vector2(-8, -8);
+            eqViewGO.GetComponent<Image>().color = new Color(0, 0, 0, 0.0015f);
+            eqScroll.viewport = eqv;
+            var eqContentGO = new GameObject("Content", typeof(RectTransform));
+            eqContentGO.transform.SetParent(eqViewGO.transform, false);
+            var eqc = eqContentGO.GetComponent<RectTransform>(); eqc.anchorMin = new Vector2(0, 0); eqc.anchorMax = new Vector2(0, 1); eqc.pivot = new Vector2(0, 0.5f);
+            eqc.sizeDelta = new Vector2(slotGap + SLOTS * (slotW + slotGap), 0); eqc.anchoredPosition = Vector2.zero;
+            eqScroll.content = eqc;
+
+            var equipBtns = new Button[SLOTS]; var equipIcons = new Image[SLOTS]; var equipLocks = new GameObject[SLOTS];
+            for (int i = 0; i < SLOTS; i++)
             {
-                var row = MakePanel("Row_" + i, card.transform, new Color(0.13f, 0.15f, 0.18f, 1f));
-                var rr = row.rectTransform; rr.anchorMin = rr.anchorMax = new Vector2(0.5f, 0.5f); rr.pivot = new Vector2(0.5f, 0.5f);
-                rr.sizeDelta = new Vector2(rowW, rowH); rr.anchoredPosition = new Vector2(0, startY - i * stepY);
-                rowBgs[i] = row;
-                rowButtons[i] = row.gameObject.AddComponent<Button>(); rowButtons[i].targetGraphic = row;
-
-                var blob = MakeCircle("Slime", row.transform, RarityCols[i]);
-                var bl = blob.rectTransform; bl.anchorMin = bl.anchorMax = new Vector2(0, 0.5f); bl.pivot = new Vector2(0, 0.5f);
-                bl.sizeDelta = new Vector2(96, 96); bl.anchoredPosition = new Vector2(28, 0);
-
-                var nm = MakeText("Name", row.transform, RarityNames[i] + " Slime", 36, RarityCols[i], TextAnchor.MiddleLeft);
-                var nmr = nm.rectTransform; nmr.anchorMin = new Vector2(0, 0); nmr.anchorMax = new Vector2(1, 1); nmr.pivot = new Vector2(0.5f, 0.5f);
-                nmr.offsetMin = new Vector2(150, 0); nmr.offsetMax = new Vector2(-180, 0);
-
-                counts[i] = MakeText("Count", row.transform, "x0", 40, TextCol, TextAnchor.MiddleRight);
-                var cnt = counts[i].rectTransform; cnt.anchorMin = new Vector2(1, 0); cnt.anchorMax = new Vector2(1, 1); cnt.pivot = new Vector2(1, 0.5f);
-                cnt.sizeDelta = new Vector2(160, 0); cnt.anchoredPosition = new Vector2(-30, 0);
+                var sq = MakePanel("Equip_" + (i + 1), eqContentGO.transform, cellBg);
+                var sqr = sq.rectTransform; sqr.anchorMin = sqr.anchorMax = new Vector2(0, 0.5f); sqr.pivot = new Vector2(0, 0.5f);
+                sqr.sizeDelta = new Vector2(slotW, slotW); sqr.anchoredPosition = new Vector2(slotGap + i * (slotW + slotGap), 0);
+                equipBtns[i] = sq.gameObject.AddComponent<Button>(); equipBtns[i].targetGraphic = sq;
+                var icon = MakeCircle("Icon", sq.transform, RarityCols[0]);
+                var icr = icon.rectTransform; icr.anchorMin = icr.anchorMax = new Vector2(0.5f, 0.5f); icr.pivot = new Vector2(0.5f, 0.5f); icr.sizeDelta = new Vector2(104, 104); icr.anchoredPosition = Vector2.zero;
+                icon.raycastTarget = false; icon.gameObject.SetActive(false); equipIcons[i] = icon;
+                var lockOv = MakePanel("Lock", sq.transform, new Color(0.05f, 0.06f, 0.08f, 0.97f));
+                var lkr = lockOv.rectTransform; lkr.anchorMin = Vector2.zero; lkr.anchorMax = Vector2.one; lkr.offsetMin = Vector2.zero; lkr.offsetMax = Vector2.zero;
+                equipLocks[i] = lockOv.gameObject;
             }
 
-            // Auto-Equip Best (full width)
-            var auto = MakePanel("AutoEquipButton", card.transform, new Color(0.28f, 0.42f, 0.58f, 1f));
-            var ar = auto.rectTransform; ar.anchorMin = ar.anchorMax = new Vector2(0.5f, 0); ar.pivot = new Vector2(0.5f, 0);
-            ar.sizeDelta = new Vector2(860, 110); ar.anchoredPosition = new Vector2(0, 180);
+            // ===== owned-slime grid (vertical scroll) =====
+            var invScrollGO = new GameObject("InvScroll", typeof(RectTransform), typeof(Image), typeof(ScrollRect));
+            invScrollGO.transform.SetParent(slimesPanel.transform, false);
+            var ivs = invScrollGO.GetComponent<RectTransform>(); ivs.anchorMin = Vector2.zero; ivs.anchorMax = Vector2.one; ivs.offsetMin = new Vector2(0, 130); ivs.offsetMax = new Vector2(0, -196);
+            invScrollGO.GetComponent<Image>().color = scrollBg;
+            var invScroll = invScrollGO.GetComponent<ScrollRect>(); invScroll.horizontal = false; invScroll.vertical = true; invScroll.movementType = ScrollRect.MovementType.Clamped; invScroll.scrollSensitivity = 24f;
+            var ivViewGO = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(RectMask2D));
+            ivViewGO.transform.SetParent(invScrollGO.transform, false);
+            var ivv = ivViewGO.GetComponent<RectTransform>(); ivv.anchorMin = Vector2.zero; ivv.anchorMax = Vector2.one; ivv.offsetMin = new Vector2(8, 8); ivv.offsetMax = new Vector2(-8, -8);
+            ivViewGO.GetComponent<Image>().color = new Color(0, 0, 0, 0.0015f);
+            invScroll.viewport = ivv;
+            var ivContentGO = new GameObject("Content", typeof(RectTransform), typeof(GridLayoutGroup), typeof(ContentSizeFitter));
+            ivContentGO.transform.SetParent(ivViewGO.transform, false);
+            // anchor content TOP-LEFT and let ContentSizeFitter size it to the grid exactly (avoids a stretched/centered content that cuts cells off on the left)
+            var ivc = ivContentGO.GetComponent<RectTransform>(); ivc.anchorMin = new Vector2(0, 1); ivc.anchorMax = new Vector2(0, 1); ivc.pivot = new Vector2(0, 1); ivc.anchoredPosition = Vector2.zero; ivc.sizeDelta = Vector2.zero;
+            var grid = ivContentGO.GetComponent<GridLayoutGroup>(); grid.cellSize = new Vector2(270, 350); grid.spacing = new Vector2(14, 14); grid.padding = new RectOffset(8, 8, 8, 8); grid.childAlignment = TextAnchor.UpperLeft; grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount; grid.constraintCount = 3;
+            var ivFitter = ivContentGO.GetComponent<ContentSizeFitter>(); ivFitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize; ivFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            invScroll.content = ivc;
+
+            int n = RarityNames.Length;
+            var invBtns = new Button[n]; var invFrames = new Image[n]; var invIcons = new Image[n]; var invCounts = new Text[n];
+            var invSellBtns = new Button[n]; var invEquipBtns = new Button[n];
+            Color frameOff = new Color(0.10f, 0.11f, 0.14f, 1f);
+            Color sellCol = new Color(0.30f, 0.50f, 0.32f, 1f), equipCol = new Color(0.28f, 0.42f, 0.58f, 1f);
+            for (int i = 0; i < n; i++)
+            {
+                // outer frame = selection highlight; inner bg (white base so the Button colour-tint shows directly = hover)
+                var frame = MakePanel("Inv_" + i, ivContentGO.transform, frameOff);
+                invFrames[i] = frame;
+                var cellBtn = frame.gameObject.AddComponent<Button>(); invBtns[i] = cellBtn;
+                var bg = MakePanel("Bg", frame.transform, Color.white);
+                var bgr = bg.rectTransform; bgr.anchorMin = Vector2.zero; bgr.anchorMax = Vector2.one; bgr.offsetMin = new Vector2(6, 6); bgr.offsetMax = new Vector2(-6, -6);
+                cellBtn.targetGraphic = bg;
+                var cbk = cellBtn.colors; cbk.normalColor = cellBg; cbk.highlightedColor = new Color(0.20f, 0.24f, 0.30f, 1f); cbk.pressedColor = new Color(0.26f, 0.32f, 0.40f, 1f); cbk.selectedColor = cellBg; cbk.fadeDuration = 0.08f; cellBtn.colors = cbk;
+
+                var icon = MakeCircle("Icon", bg.transform, RarityCols[i]);
+                var icr = icon.rectTransform; icr.anchorMin = icr.anchorMax = new Vector2(0.5f, 1); icr.pivot = new Vector2(0.5f, 1); icr.sizeDelta = new Vector2(110, 110); icr.anchoredPosition = new Vector2(0, -14);
+                icon.raycastTarget = false; invIcons[i] = icon;
+
+                var cnt = MakeText("Count", bg.transform, "x0", 26, TextCol, TextAnchor.MiddleRight); cnt.raycastTarget = false;
+                var cntr = cnt.rectTransform; cntr.anchorMin = cntr.anchorMax = new Vector2(1, 1); cntr.pivot = new Vector2(1, 1); cntr.sizeDelta = new Vector2(96, 38); cntr.anchoredPosition = new Vector2(-8, -8);
+                invCounts[i] = cnt;
+
+                // name right below the image
+                var nm = MakeText("Name", bg.transform, RarityNames[i], 24, RarityCols[i], TextAnchor.MiddleCenter); nm.raycastTarget = false;
+                var nmr = nm.rectTransform; nmr.anchorMin = new Vector2(0, 1); nmr.anchorMax = new Vector2(1, 1); nmr.pivot = new Vector2(0.5f, 1); nmr.sizeDelta = new Vector2(-8, 40); nmr.anchoredPosition = new Vector2(0, -130);
+
+                // Sell + Equip stacked at the bottom
+                var sellB = MakePanel("Sell", bg.transform, sellCol);
+                var sbr = sellB.rectTransform; sbr.anchorMin = sbr.anchorMax = new Vector2(0.5f, 0); sbr.pivot = new Vector2(0.5f, 0); sbr.sizeDelta = new Vector2(226, 54); sbr.anchoredPosition = new Vector2(0, 72);
+                invSellBtns[i] = sellB.gameObject.AddComponent<Button>(); invSellBtns[i].targetGraphic = sellB;
+                var sbl = MakeText("L", sellB.transform, "Sell", 26, Color.white, TextAnchor.MiddleCenter); sbl.raycastTarget = false; Stretch(sbl.rectTransform);
+
+                var equipB = MakePanel("Equip", bg.transform, equipCol);
+                var ebr = equipB.rectTransform; ebr.anchorMin = ebr.anchorMax = new Vector2(0.5f, 0); ebr.pivot = new Vector2(0.5f, 0); ebr.sizeDelta = new Vector2(226, 54); ebr.anchoredPosition = new Vector2(0, 10);
+                invEquipBtns[i] = equipB.gameObject.AddComponent<Button>(); invEquipBtns[i].targetGraphic = equipB;
+                var ebl = MakeText("L", equipB.transform, "Equip", 26, Color.white, TextAnchor.MiddleCenter); ebl.raycastTarget = false; Stretch(ebl.rectTransform);
+            }
+
+            // ===== bottom: Auto-Equip on the right (left slot left empty for a future button) =====
+            var auto = MakePanel("AutoEquipButton", slimesPanel.transform, new Color(0.28f, 0.42f, 0.58f, 1f));
+            var ar = auto.rectTransform; ar.anchorMin = ar.anchorMax = new Vector2(1, 0); ar.pivot = new Vector2(1, 0); ar.sizeDelta = new Vector2(420, 110); ar.anchoredPosition = Vector2.zero;
             var autoBtn = auto.gameObject.AddComponent<Button>(); autoBtn.targetGraphic = auto;
-            var autoLabel = MakeText("Label", auto.transform, "Auto-Equip Best", 32, Color.white, TextAnchor.MiddleCenter);
-            Stretch(autoLabel.rectTransform);
+            var autoLabel = MakeText("Label", auto.transform, "Auto-Equip", 32, Color.white, TextAnchor.MiddleCenter); autoLabel.raycastTarget = false; Stretch(autoLabel.rectTransform);
 
-            var sell = MakePanel("SellButton", card.transform, new Color(0.30f, 0.55f, 0.32f, 1f));
-            var sr = sell.rectTransform; sr.anchorMin = new Vector2(0.5f, 0); sr.anchorMax = new Vector2(0.5f, 0); sr.pivot = new Vector2(0.5f, 0);
-            sr.sizeDelta = new Vector2(860, 110); sr.anchoredPosition = new Vector2(0, 40);
-            var sellBtn = sell.gameObject.AddComponent<Button>(); sellBtn.targetGraphic = sell;
-            var sellLabel = MakeText("SellLabel", sell.transform, "Select a slime", 36, Color.white, TextAnchor.MiddleCenter);
-            Stretch(sellLabel.rectTransform);
-
-            ui.rowButtons = rowButtons; ui.rowBackgrounds = rowBgs; ui.countTexts = counts;
-            ui.sellButton = sellBtn; ui.sellLabel = sellLabel;
+            // wire
+            ui.slimesTabBtn = slimesTabBtn; ui.itemsTabBtn = itemsTabBtn; ui.slimesTabBg = slimesTab; ui.itemsTabBg = itemsTab;
+            ui.slimesPanel = slimesPanel; ui.itemsPanel = itemsPanel;
+            ui.equipSlotBtns = equipBtns; ui.equipSlotIcons = equipIcons; ui.equipSlotLocks = equipLocks;
+            ui.invBtns = invBtns; ui.invFrames = invFrames; ui.invIcons = invIcons; ui.invCounts = invCounts;
+            ui.invSellBtns = invSellBtns; ui.invEquipBtns = invEquipBtns;
             ui.autoEquipButton = autoBtn;
             return ui;
         }
@@ -470,6 +709,9 @@ namespace SlimeRPG.EditorTools
             var panel = MakeImage("SkillsPanel", root, new Color(0, 0, 0, 0.66f));
             Stretch(panel.rectTransform);
             panelGO = panel.gameObject;
+            // render above the HP bars' override-sorting canvas (20) so bars don't bleed through this overlay
+            var scv = panelGO.AddComponent<Canvas>(); scv.overrideSorting = true; scv.sortingOrder = 30;
+            panelGO.AddComponent<GraphicRaycaster>();
 
             var card = MakePanel("Card", panel.transform, PanelDark);
             var cr = card.rectTransform; cr.anchorMin = cr.anchorMax = new Vector2(0.5f, 0.5f); cr.pivot = new Vector2(0.5f, 0.5f);
@@ -494,19 +736,21 @@ namespace SlimeRPG.EditorTools
                 ctr + new Vector2(0, -H),
                 ctr + new Vector2(-W * 0.75f, -H * 0.5f),
                 ctr + new Vector2(-W * 0.75f,  H * 0.5f),
+                ctr + new Vector2(-W * 1.5f,  H),   // Roll Speed: one ring out past Speed (upper-left)
             };
-            string[] names = { "Auto Roll", "Hero Slot", "Luck", "Damage", "Gold", "Crit", "Speed" };
+            string[] names = { "Auto Roll", "Hero Slot", "Luck", "Damage", "Gold", "Crit", "Speed", "Roll Speed" };
             SkillNode.Effect[] effects = {
                 SkillNode.Effect.AutoRoll, SkillNode.Effect.HeroSlot, SkillNode.Effect.Luck, SkillNode.Effect.Damage,
-                SkillNode.Effect.Gold, SkillNode.Effect.Crit, SkillNode.Effect.Speed
+                SkillNode.Effect.Gold, SkillNode.Effect.Crit, SkillNode.Effect.Speed, SkillNode.Effect.Spin
             };
-            int[] baseCosts = { 0, 100, 60, 60, 60, 80, 80 };
+            int[] baseCosts = { 0, 100, 60, 60, 60, 80, 80, 120 };
 
             var nodes = new SkillNode[pos.Length];
             for (int i = 0; i < pos.Length; i++) nodes[i] = MakeHexNode(card.transform, names[i], pos[i], W, effects[i], baseCosts[i]);
 
             nodes[0].neighbors = new[] { nodes[1], nodes[2], nodes[3], nodes[4], nodes[5], nodes[6] };
             for (int i = 1; i < nodes.Length; i++) nodes[i].neighbors = new SkillNode[0];
+            nodes[6].neighbors = new[] { nodes[7] }; // Speed reveals Roll Speed
 
             nodes[0].SetState(SkillNode.State.Available);
             for (int i = 1; i < nodes.Length; i++) nodes[i].SetState(SkillNode.State.Hidden);
@@ -558,6 +802,100 @@ namespace SlimeRPG.EditorTools
             tex.SetPixels32(px); tex.Apply();
             _hex = Sprite.Create(tex, new Rect(0, 0, S, S), new Vector2(0.5f, 0.5f), 100f);
             return _hex;
+        }
+
+        /// <summary>Crisp anti-aliased solid white disc (hard edge, unlike the soft builtin Knob). Tinted by Image.color.</summary>
+        static Sprite GetDiscSprite()
+        {
+            if (_disc != null) return _disc;
+            int S = 128;
+            var tex = new Texture2D(S, S, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            Vector2 c = new Vector2(S / 2f, S / 2f);
+            float R = S / 2f - 1f;
+            var px = new Color32[S * S];
+            for (int y = 0; y < S; y++)
+                for (int x = 0; x < S; x++)
+                {
+                    int hit = 0;
+                    for (int sy = 0; sy < 2; sy++)
+                        for (int sx = 0; sx < 2; sx++)
+                        {
+                            var p = new Vector2(x + 0.25f + sx * 0.5f, y + 0.25f + sy * 0.5f);
+                            if ((p - c).sqrMagnitude <= R * R) hit++;
+                        }
+                    px[y * S + x] = new Color32(255, 255, 255, (byte)(hit * 255 / 4));
+                }
+            tex.SetPixels32(px); tex.Apply();
+            _disc = Sprite.Create(tex, new Rect(0, 0, S, S), new Vector2(0.5f, 0.5f), 100f);
+            return _disc;
+        }
+
+        /// <summary>Top-half semicircle (dome) sprite, pivot at the bottom-centre so the flat side sits on an edge.</summary>
+        static Sprite GetDomeSprite()
+        {
+            if (_dome != null) return _dome;
+            int W = 256, H = 128;
+            var tex = new Texture2D(W, H, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            Vector2 c = new Vector2(W / 2f, 0f); // bottom-centre
+            float R = W / 2f - 1f;
+            var px = new Color32[W * H];
+            for (int y = 0; y < H; y++)
+                for (int x = 0; x < W; x++)
+                {
+                    int hit = 0;
+                    for (int sy = 0; sy < 2; sy++)
+                        for (int sx = 0; sx < 2; sx++)
+                        {
+                            var p = new Vector2(x + 0.25f + sx * 0.5f, y + 0.25f + sy * 0.5f);
+                            if ((p - c).sqrMagnitude <= R * R) hit++;
+                        }
+                    px[y * W + x] = new Color32(255, 255, 255, (byte)(hit * 255 / 4));
+                }
+            tex.SetPixels32(px); tex.Apply();
+            _dome = Sprite.Create(tex, new Rect(0, 0, W, H), new Vector2(0.5f, 0f), 100f);
+            return _dome;
+        }
+
+        /// <summary>9-sliced rounded-rectangle sprite with a clear corner radius (for the floating top fields).</summary>
+        static Sprite GetRoundedSprite()
+        {
+            if (_roundedRect != null) return _roundedRect;
+            int S = 64; float R = 24f;
+            var tex = new Texture2D(S, S, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            var px = new Color32[S * S];
+            for (int y = 0; y < S; y++)
+                for (int x = 0; x < S; x++)
+                {
+                    int hit = 0;
+                    for (int sy = 0; sy < 2; sy++)
+                        for (int sx = 0; sx < 2; sx++)
+                        {
+                            float pxv = x + 0.25f + sx * 0.5f, pyv = y + 0.25f + sy * 0.5f;
+                            float cx = Mathf.Clamp(pxv, R, S - R), cy = Mathf.Clamp(pyv, R, S - R);
+                            float dx = pxv - cx, dy = pyv - cy;
+                            if (dx * dx + dy * dy <= R * R) hit++;
+                        }
+                    px[y * S + x] = new Color32(255, 255, 255, (byte)(hit * 255 / 4));
+                }
+            tex.SetPixels32(px); tex.Apply();
+            _roundedRect = Sprite.Create(tex, new Rect(0, 0, S, S), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect, new Vector4(R, R, R, R));
+            return _roundedRect;
+        }
+
+        static Image MakeRounded(string name, Transform parent, Color color)
+        {
+            var img = MakeImage(name, parent, color);
+            img.sprite = GetRoundedSprite(); img.type = Image.Type.Sliced;
+            return img;
+        }
+
+        /// <summary>Make a Text bold with a black outline (legible over the sky without a panel background).</summary>
+        static void BoldOutline(Text t, float dist)
+        {
+            t.fontStyle = FontStyle.Bold;
+            var o = t.gameObject.AddComponent<Outline>();
+            o.effectColor = new Color(0f, 0f, 0f, 0.92f);
+            o.effectDistance = new Vector2(dist, -dist);
         }
 
         static bool PointInPoly(Vector2 p, Vector2[] poly)
