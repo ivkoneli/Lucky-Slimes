@@ -18,8 +18,17 @@ namespace SlimeRPG
         public float spinDuration = 2f;   // seconds for one click tumble
         public float minDuration = 0.5f;
         public int flips = 5;             // forward rolls per tumble
-        public Image[] facePips;          // 7 pips: 0=TL 1=TR 2=ML 3=MR 4=BL 5=BR 6=C
+        public Image[] facePips;          // 7 pips: 0=TL 1=TR 2=ML 3=MR 4=BL 5=BR 6=C (rest face)
         public CanvasGroup blurGroup;     // faded while fast for a motion-blur feel
+
+        [Header("Reel (slime faces + 2X flashing while spinning)")]
+        public Image reelIcon;            // slime body shown during the spin (covers the hidden cube)
+        public GameObject reelEyes;       // the slime's eyes (on for slime frames, off for the 2X frame)
+        public Text reelText;             // "2X" shown on the 2X frames
+        public SlimeRoller roller;        // source of the curated reel colours
+        public Color[] reelColors;        // fallback list if roller is null
+
+        Color _resultColor = Color.white; // the slime the reel slows down and lands on
 
         Coroutine _co;
         bool _spinning;
@@ -34,36 +43,68 @@ namespace SlimeRPG
             new int[]{0,1,2,3,4,5},       // 6
         };
 
-        public void Spin()
+        public void Spin(Color resultColor)
         {
             if (target == null || !isActiveAndEnabled) return;
             if (_spinning) return; // already tumbling — don't restart (auto-roll fired this every cooldown)
+            _resultColor = resultColor;
             _co = StartCoroutine(Tumble());
         }
 
         IEnumerator Tumble()
         {
             _spinning = true;
-            float dur = Mathf.Max(0.1f, spinDuration);
-            float totalAng = 360f * Mathf.Max(1, flips);
-            float t = 0f; int lastQuarter = -1;
+            if (roller != null) { var rc = roller.GetReelColors(); if (rc != null && rc.Length > 0) reelColors = rc; }
+            bool reel = reelIcon != null;
+            if (reel) reelIcon.gameObject.SetActive(true);
+            if (blurGroup != null) blurGroup.alpha = 0f;   // HIDE the cube — the reel slime takes over
+            target.localRotation = Quaternion.identity;
+
+            float dur = Mathf.Max(0.4f, spinDuration);
+            float lockAt = dur - 0.5f;                      // last 0.5s: locked on the result so you see what you got
+            float t = 0f, nextFlip = 0f; int reelIdx = 0; bool locked = false;
             while (t < dur)
             {
                 t += Time.deltaTime;
-                float u = Mathf.Clamp01(t / dur);
-                float eased = 1f - Mathf.Pow(1f - u, 3f);          // ease-out: fast then settle
-                float ang = totalAng * eased;
-                target.localRotation = Quaternion.Euler(-ang, 0f, 0f); // tip top forward
-                int q = Mathf.FloorToInt(ang / 90f);
-                if (q != lastQuarter) { lastQuarter = q; SetFace(Random.Range(1, 7)); }
-                if (blurGroup != null) blurGroup.alpha = Mathf.Lerp(0.5f, 1f, eased);
+                if (reel)
+                {
+                    if (!locked && t >= lockAt) { locked = true; ShowReelSlime(_resultColor); }
+                    else if (!locked && t >= nextFlip)
+                    {
+                        AdvanceReel(ref reelIdx);
+                        float u = t / dur;
+                        nextFlip = t + Mathf.Lerp(0.04f, 0.17f, u * u); // flashes fast then slows down
+                    }
+                }
                 yield return null;
             }
-            target.localRotation = Quaternion.identity;
-            if (blurGroup != null) blurGroup.alpha = 1f;
+            if (reel) ShowReelSlime(_resultColor);
+            yield return null;
+
+            if (reel) { reelIcon.gameObject.SetActive(false); if (reelText != null) reelText.gameObject.SetActive(false); }
+            if (blurGroup != null) blurGroup.alpha = 1f;    // cube back
             SetFace(Random.Range(1, 7));
             _co = null;
             _spinning = false;
+        }
+
+        // Cycle the reel: next slime colour (with eyes), with a "2X" frame mixed in.
+        void AdvanceReel(ref int idx)
+        {
+            if (reelColors == null || reelColors.Length == 0) return;
+            int n = reelColors.Length;
+            idx = (idx + 1) % (n + 1);          // last index = the 2X frame
+            if (idx == n) SetReel(new Color(1f, 0.84f, 0.25f, 1f), true);
+            else SetReel(reelColors[idx], false);
+        }
+
+        void ShowReelSlime(Color c) => SetReel(c, false);
+
+        void SetReel(Color bodyColor, bool twoX)
+        {
+            if (reelIcon != null) reelIcon.color = bodyColor;
+            if (reelEyes != null) reelEyes.SetActive(!twoX);
+            if (reelText != null) reelText.gameObject.SetActive(twoX);
         }
 
         public void SetFace(int n)

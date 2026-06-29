@@ -23,14 +23,15 @@ namespace SlimeRPG
         public Text[] slotButtonLabels;   // SlotCount
         public GameObject[] slotCoinIcons; // SlotCount — gold coin shown in the Upgrade state
         public Text[] slotCostLabels;      // SlotCount — upgrade cost (placeholder)
+        public Button[] slotEquipButtons;  // SlotCount — "Equip" shown on an unlocked-but-empty slot -> opens inventory
         public Button unlockSlotButton;   // optional legacy button (Skill Tree); may be null
         public Text unlockSlotLabel;
 
         [Header("Slot unlock routes to the Skill Tree")]
         public GameObject skillsPanel;
         public GameObject inventoryPanel;
-        public SkillNode heroSlotNode;    // the Hero Slot skill (real slot unlock)
-        public SkillNode skillStartNode;  // tree centre — highlighted if Hero Slot isn't revealed yet
+        public SkillNode[] heroSlotNodes; // the Hero Slot chain (1->2->3->4); highlight the next buyable one
+        public SkillNode skillStartNode;  // tree centre — highlighted if no Hero Slot hex is revealed yet
 
         public int unlockedSlots = 1;
         public int[] equipped = { -1, -1, -1, -1, -1, -1, -1 };
@@ -60,6 +61,9 @@ namespace SlimeRPG
                     int idx = i;
                     if (slotButtons[i] != null) slotButtons[i].onClick.AddListener(() => OnSlotButton(idx));
                 }
+            if (slotEquipButtons != null)
+                foreach (var b in slotEquipButtons)
+                    if (b != null) b.onClick.AddListener(OpenInventory);
             RefreshSlots();
             RebuildHeroes();
         }
@@ -134,13 +138,23 @@ namespace SlimeRPG
             else if (i == unlockedSlots) OpenSlotUnlock();
         }
 
-        /// <summary>Slots are only unlocked via the Skill Tree. Open it and pulse the Hero Slot node.</summary>
+        /// <summary>Slots are only unlocked via the Skill Tree. Open it and pulse the NEXT buyable Hero Slot hex.</summary>
         void OpenSlotUnlock()
         {
             if (inventoryPanel != null) inventoryPanel.SetActive(false);
             if (skillsPanel != null) skillsPanel.SetActive(true);
-            var target = (heroSlotNode != null && heroSlotNode.gameObject.activeInHierarchy) ? heroSlotNode : skillStartNode;
+            SkillNode target = skillStartNode;
+            if (heroSlotNodes != null)
+                foreach (var n in heroSlotNodes)
+                    if (n != null && n.gameObject.activeInHierarchy && n.state == SkillNode.State.Available) { target = n; break; }
             if (target != null) target.Highlight();
+        }
+
+        /// <summary>Open the inventory (from an empty slot's Equip button).</summary>
+        void OpenInventory()
+        {
+            if (skillsPanel != null) skillsPanel.SetActive(false);
+            if (inventoryPanel != null) inventoryPanel.SetActive(true);
         }
 
         /// <summary>Unlocks a team slot for free (used by the Hero Slot skill, which already paid).</summary>
@@ -178,6 +192,9 @@ namespace SlimeRPG
                     slotMini[i].gameObject.SetActive(has);
                     if (has) slotMini[i].color = RarityCols[equipped[i]];
                 }
+                // "Equip" button on an unlocked-but-empty slot (where the slime icon would be)
+                if (slotEquipButtons != null && i < slotEquipButtons.Length && slotEquipButtons[i] != null)
+                    slotEquipButtons[i].gameObject.SetActive(unlocked && equipped[i] < 0);
                 if (slotButtonLabels != null && i < slotButtonLabels.Length && slotButtonLabels[i] != null)
                     slotButtonLabels[i].text = unlocked ? "Upgrade" : (isNext ? "Unlock" : "Locked");
                 // Upgrade state shows a gold coin + cost (placeholder); Unlock/Locked hide them

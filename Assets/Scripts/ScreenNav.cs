@@ -9,18 +9,21 @@ namespace SlimeRPG
     /// </summary>
     public class ScreenNav : MonoBehaviour
     {
-        public Button inventoryButton, skillsButton;
-        public Button inventoryClose, skillsClose;
-        public GameObject inventoryPanel, skillsPanel;
+        public Button inventoryButton, skillsButton, collectionButton;
+        public Button inventoryClose, skillsClose, collectionClose;
+        public GameObject inventoryPanel, skillsPanel, collectionPanel;
 
         void Start()
         {
             if (inventoryButton != null) inventoryButton.onClick.AddListener(() => Toggle(inventoryPanel));
             if (skillsButton != null) skillsButton.onClick.AddListener(() => Toggle(skillsPanel));
+            if (collectionButton != null) collectionButton.onClick.AddListener(() => Toggle(collectionPanel));
             if (inventoryClose != null) inventoryClose.onClick.AddListener(() => Hide(inventoryPanel));
             if (skillsClose != null) skillsClose.onClick.AddListener(() => Hide(skillsPanel));
+            if (collectionClose != null) collectionClose.onClick.AddListener(() => Hide(collectionPanel));
             Hide(inventoryPanel);
             Hide(skillsPanel);
+            Hide(collectionPanel);
         }
 
         void Toggle(GameObject panel)
@@ -29,6 +32,7 @@ namespace SlimeRPG
             bool show = !panel.activeSelf;
             Hide(inventoryPanel);
             Hide(skillsPanel);
+            Hide(collectionPanel);
             panel.SetActive(show);
         }
 

@@ -50,9 +50,16 @@ namespace SlimeRPG
         [Header("Dice Animation")]
         /// <summary>Plays the 2s tumble on each roll (manual tap or Auto Roll).</summary>
         public DiceSpinner diceSpinner;
+        public RectTransform plusOneAnchor; // the dice rect — floating "+1" spawns here on a duplicate
+        public Font font;                   // for the floating "+1" text
+
+        [Header("Collection alert (badge on the Collection nav button)")]
+        public GameObject collectionBadge;
+        public Text collectionBadgeText;
+        bool[] _seen;
 
         [Header("Roll Cooldown")]
-        public float rollCooldown = 2.1f; // ~ spin length (2s) + small buffer so auto-roll doesn't overlap
+        public float rollCooldown = 2.5f; // 2s spin + 0.5s gap so the result is readable before the next roll
         public Image cooldownOverlay;   // Filled image over the dice; full -> empty as it cools
         bool _cooling;
 
@@ -103,6 +110,7 @@ namespace SlimeRPG
             if (cooldownOverlay != null) cooldownOverlay.fillAmount = 0f; // ready
             UpdateGoldUI();
             UpdateLuckUI();
+            UpdateCollectionBadge();
         }
 
         void Update()
@@ -136,15 +144,17 @@ namespace SlimeRPG
             }
 
             SlimeRarity got = rarities[picked];
+            bool isNew = owned[picked] == 0; // first time we've ever pulled this one
             owned[picked]++;
-            ShowPopup(got); // dice keeps its own colour now (no rarity tint)
 
             string hex = ColorUtility.ToHtmlStringRGB(got.color);
-            Debug.Log($"<color=#{hex}>● [Roll #{rollCount}] {got.name}!  (base 1/{got.Denominator})  — now own x{owned[picked]}</color>");
+            Debug.Log($"<color=#{hex}>● [Roll #{rollCount}] {got.name}{(isNew ? " (NEW!)" : "")}  (base 1/{got.Denominator})  — now own x{owned[picked]}</color>");
 
             OnInventoryChanged?.Invoke();
-            OnRolled?.Invoke(picked);
-            if (diceSpinner != null) diceSpinner.Spin();
+            if (diceSpinner != null) diceSpinner.Spin(got.color);
+            // equip + reveal happen once the reel LANDS (not at roll start), so auto-equip waits for the animation
+            if (diceSpinner != null && Application.isPlaying) StartCoroutine(RevealAfter(diceSpinner.spinDuration, got, isNew, picked));
+            else { OnRolled?.Invoke(picked); SpawnReveal(got.color, got.name, isNew); UpdateCollectionBadge(); }
             if (Application.isPlaying) StartCoroutine(CooldownRoutine());
             return got;
         }
@@ -193,6 +203,91 @@ namespace SlimeRPG
             if (popupRoot != null) popupRoot.SetActive(false);
             if (_popupCg != null) _popupCg.alpha = 1f;
             _hideCo = null;
+        }
+
+        /// <summary>When the reel lands: auto-equip (if applicable), show the floater, bump the collection alert.</summary>
+        IEnumerator RevealAfter(float delay, SlimeRarity got, bool isNew, int picked)
+        {
+            yield return new WaitForSeconds(delay);
+            OnRolled?.Invoke(picked); // auto-equip the first slime here, AFTER the animation
+            SpawnReveal(got.color, got.name, isNew);
+            UpdateCollectionBadge();
+        }
+
+        void EnsureSeen() { if (_seen == null || _seen.Length != (rarities?.Count ?? 0)) _seen = new bool[rarities?.Count ?? 0]; }
+
+        /// <summary>Shows "(N)" on the Collection nav button = owned slimes not yet viewed in the Collection.</summary>
+        public void UpdateCollectionBadge()
+        {
+            EnsureOwned(); EnsureSeen();
+            int n = 0;
+            for (int i = 0; i < owned.Length && i < _seen.Length; i++) if (owned[i] > 0 && !_seen[i]) n++;
+            if (collectionBadge != null) collectionBadge.SetActive(n > 0);
+            if (collectionBadgeText != null) collectionBadgeText.text = n.ToString();
+        }
+
+        /// <summary>Mark every owned slime as viewed (call when the Collection opens) and clear the badge.</summary>
+        public void MarkCollectionSeen()
+        {
+            EnsureOwned(); EnsureSeen();
+            for (int i = 0; i < owned.Length && i < _seen.Length; i++) if (owned[i] > 0) _seen[i] = true;
+            UpdateCollectionBadge();
+        }
+
+        /// <summary>Small floater out of the dice: "+1" (or "NEW!") + the slime's name, in its colour.</summary>
+        public void SpawnReveal(Color c, string slimeName, bool isNew)
+        {
+            if (!Application.isPlaying || plusOneAnchor == null || font == null) return;
+            var go = new GameObject("RollReveal", typeof(RectTransform), typeof(CanvasGroup));
+            go.transform.SetParent(plusOneAnchor.parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = plusOneAnchor.anchorMin; rt.anchorMax = plusOneAnchor.anchorMax; rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(460, 120);
+            rt.anchoredPosition = plusOneAnchor.anchoredPosition + new Vector2(0, 40f);
+            var cg = go.GetComponent<CanvasGroup>();
+            MakeFloatText(go.transform, isNew ? "NEW!" : "+1", isNew ? new Color(1f, 0.86f, 0.3f) : c, 50, new Vector2(0, 30));
+            MakeFloatText(go.transform, slimeName, c, 34, new Vector2(0, -28));
+            StartCoroutine(FloatReveal(rt, cg));
+        }
+
+        void MakeFloatText(Transform parent, string s, Color c, int size, Vector2 pos)
+        {
+            var go = new GameObject("T", typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>(); rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f); rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(460, 56); rt.anchoredPosition = pos;
+            var t = go.AddComponent<Text>();
+            t.font = font; t.text = s; t.fontSize = size; t.fontStyle = FontStyle.Bold; t.alignment = TextAnchor.MiddleCenter; t.color = c;
+            t.horizontalOverflow = HorizontalWrapMode.Overflow; t.verticalOverflow = VerticalWrapMode.Overflow;
+            var o = go.AddComponent<UnityEngine.UI.Outline>(); o.effectColor = new Color(0f, 0f, 0f, 0.9f); o.effectDistance = new Vector2(2.5f, -2.5f);
+        }
+
+        IEnumerator FloatReveal(RectTransform rt, CanvasGroup cg)
+        {
+            Vector2 start = rt.anchoredPosition;
+            float dur = 1.2f, tm = 0f;
+            while (tm < dur && rt != null)
+            {
+                tm += Time.deltaTime; float u = tm / dur;
+                rt.anchoredPosition = start + new Vector2(0, 80f * u);
+                if (cg != null) cg.alpha = u < 0.65f ? 1f : Mathf.Clamp01((1f - u) / 0.35f);
+                yield return null;
+            }
+            if (rt != null) Destroy(rt.gameObject);
+        }
+
+        /// <summary>
+        /// Colours flashing on the dice while it spins — a CURATED list of "relevant" slimes.
+        /// TODO (manual tuning later): drop tiers whose effective chance (baseWeight*luck^i) is below
+        /// ~0.0001% (too rare to tease), AND drop the lowest commons once luck is very high (e.g. 100x)
+        /// since they're no longer relevant. For now returns every rarity colour.
+        /// </summary>
+        public Color[] GetReelColors()
+        {
+            if (rarities == null || rarities.Count == 0) return null;
+            var list = new List<Color>(rarities.Count);
+            for (int i = 0; i < rarities.Count; i++) list.Add(rarities[i].color);
+            return list.ToArray();
         }
 
         /// <summary>Sells all duplicate copies of a rarity (keeps 1). Returns gold gained.</summary>

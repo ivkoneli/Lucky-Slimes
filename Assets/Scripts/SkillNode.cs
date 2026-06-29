@@ -37,7 +37,7 @@ namespace SlimeRPG
         bool _wired;
         Coroutine _pulse;
 
-        public int CurrentCost => Mathf.RoundToInt(baseCost * Mathf.Pow(10f, level));
+        public int CurrentCost => baseCost; // single purchase — no leveling
 
         /// <summary>Flash this node white a few times to draw attention (e.g. when sent here to unlock a slot). Stops on click.</summary>
         public void Highlight()
@@ -71,8 +71,7 @@ namespace SlimeRPG
 
         public void OnClick()
         {
-            if (state == State.Hidden) return;
-            if (effect == Effect.AutoRoll && state == State.Purchased) return; // one-time unlock
+            if (state != State.Available) return; // hidden or already purchased -> not buyable (one upgrade per hex)
             int cost = CurrentCost;
             if (roller != null && cost > 0)
             {
@@ -81,13 +80,9 @@ namespace SlimeRPG
                 roller.UpdateGoldUI();
                 roller.OnInventoryChanged?.Invoke();
             }
-            level++;
             ApplyEffect();
-            if (state == State.Available)
-            {
-                state = State.Purchased;
-                if (neighbors != null) foreach (var n in neighbors) if (n != null) n.Reveal();
-            }
+            state = State.Purchased;
+            if (neighbors != null) foreach (var n in neighbors) if (n != null) n.Reveal(); // unlock its neighbour(s)
             if (_pulse != null) { StopCoroutine(_pulse); _pulse = null; } // clicked — stop the attention pulse
             RefreshVisual();
         }
@@ -129,9 +124,8 @@ namespace SlimeRPG
             if (background != null) background.color = state == State.Purchased ? PurchasedCol : AvailableCol;
             if (costLabel != null)
             {
-                if (effect == Effect.AutoRoll) costLabel.text = state == State.Purchased ? "ON" : (CurrentCost > 0 ? NumberFormat.Short(CurrentCost) + "g" : "Free");
-                else if (effect == Effect.None) costLabel.text = state == State.Purchased ? "" : (CurrentCost > 0 ? NumberFormat.Short(CurrentCost) + "g" : "Open");
-                else costLabel.text = (level > 0 ? "Lv" + level + "  " : "") + NumberFormat.Short(CurrentCost) + "g";
+                if (state == State.Purchased) costLabel.text = effect == Effect.AutoRoll ? "ON" : "✓"; // checkmark
+                else costLabel.text = CurrentCost > 0 ? NumberFormat.Short(CurrentCost) + "g" : "Free";
             }
         }
     }

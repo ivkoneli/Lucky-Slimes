@@ -19,6 +19,13 @@ namespace SlimeRPG
         public Text stageNumText;
         public Image[] dots;
         public SlimeRoller roller;
+        public GameObject bossTimerRoot; // shown only on boss stages
+        public Text bossTimerText;
+
+        [Header("Boss")]
+        public float bossTimeLimit = 20f; // DPS-check: kill the boss within this or drop back a stage
+        bool _bossActive;
+        float _bossTimer;
 
         [Header("Tuning")]
         public float tickInterval = 0.55f;
@@ -54,6 +61,14 @@ namespace SlimeRPG
 
         void Update()
         {
+            // boss DPS-check countdown
+            if (_bossActive && _enemies.Count > 0)
+            {
+                _bossTimer -= Time.deltaTime;
+                if (bossTimerText != null) bossTimerText.text = Mathf.CeilToInt(Mathf.Max(0f, _bossTimer)) + "s";
+                if (_bossTimer <= 0f) { BossFail(); return; }
+            }
+
             if (_enemies.Count == 0) return;
             _timer += Time.deltaTime;
             if (_timer < tickInterval) return;
@@ -159,6 +174,14 @@ namespace SlimeRPG
 
         void Wipe() { stage = Mathf.Max(1, stage - 1); SpawnStage(stage); }
 
+        /// <summary>Boss not killed in time -> drop back a stage to farm (the soft wall).</summary>
+        void BossFail()
+        {
+            _bossActive = false;
+            if (bossTimerRoot != null) bossTimerRoot.SetActive(false);
+            Wipe();
+        }
+
         void ResetHeroes() { foreach (var h in _heroes) if (h != null) h.ResetFull(); }
 
         public void SpawnStage(int s)
@@ -171,11 +194,18 @@ namespace SlimeRPG
             ResetHeroes();
 
             bool boss = (s % 10 == 0);
+            _bossActive = boss;
+            _bossTimer = bossTimeLimit;
+            if (bossTimerRoot != null) bossTimerRoot.SetActive(boss);
+            if (bossTimerText != null && boss) bossTimerText.text = Mathf.CeilToInt(bossTimeLimit) + "s";
             if (boss)
             {
-                float k = Mathf.Max(1f, s / 10f);
-                var u = CreateUnit(enemyContainer, new Vector2(330, -90), 240f, EnemyCol, false, baseEnemyHp * 16f * k, baseEnemyDmg * 4f * k);
-                u.goldReward = Mathf.RoundToInt((baseGold + s * 2) * 10f);
+                // much tougher boss: ~12x a stage-scaled enemy's HP + 3x dmg -> real DPS check against the timer
+                float hpScale = 1f + 0.32f * (s - 1);
+                float bossHp = baseEnemyHp * hpScale * 12f;
+                float bossDmg = baseEnemyDmg * (1f + 0.30f * (s - 1)) * 3f;
+                var u = CreateUnit(enemyContainer, new Vector2(330, -90), 240f, EnemyCol, false, bossHp, bossDmg);
+                u.goldReward = Mathf.RoundToInt((baseGold + s * 2) * 12f);
                 _enemies.Add(u);
             }
             else
