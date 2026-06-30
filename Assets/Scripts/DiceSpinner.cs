@@ -17,6 +17,7 @@ namespace SlimeRPG
         public RectTransform target;
         public float spinDuration = 2f;   // seconds for one click tumble
         public float minDuration = 0.5f;
+        public float resultHold = 1.0f;   // seconds the landed slime stays shown after the reel stops
         public int flips = 5;             // forward rolls per tumble
         public Image[] facePips;          // 7 pips: 0=TL 1=TR 2=ML 3=MR 4=BL 5=BR 6=C (rest face)
         public CanvasGroup blurGroup;     // faded while fast for a motion-blur feel
@@ -73,13 +74,16 @@ namespace SlimeRPG
                     {
                         AdvanceReel(ref reelIdx);
                         float u = t / dur;
-                        nextFlip = t + Mathf.Lerp(0.04f, 0.17f, u * u); // flashes fast then slows down
+                        nextFlip = t + Mathf.Lerp(0.03f, 0.34f, u * u); // flashes fast then clearly decelerates to the result
                     }
                 }
                 yield return null;
             }
             if (reel) ShowReelSlime(_resultColor);
             yield return null;
+
+            // hold on the landed slime so the player can clearly read the pull before the SPIN face returns
+            if (reel && resultHold > 0f) yield return new WaitForSeconds(resultHold);
 
             if (reel) { reelIcon.gameObject.SetActive(false); if (reelText != null) reelText.gameObject.SetActive(false); }
             if (blurGroup != null) blurGroup.alpha = 1f;    // cube back

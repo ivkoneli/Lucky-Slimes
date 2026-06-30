@@ -59,7 +59,7 @@ namespace SlimeRPG
         bool[] _seen;
 
         [Header("Roll Cooldown")]
-        public float rollCooldown = 2.5f; // 2s spin + 0.5s gap so the result is readable before the next roll
+        public float rollCooldown = 3.3f; // 2s spin + ~1s result hold + small gap, so the pull is readable before the next roll
         public Image cooldownOverlay;   // Filled image over the dice; full -> empty as it cools
         bool _cooling;
 
@@ -67,9 +67,41 @@ namespace SlimeRPG
         /// <summary>When on (unlocked via the Auto Roll skill), the dice re-rolls itself every cooldown.</summary>
         public bool autoRoll = false;
 
-        [Header("Streak Cubes")]
-        /// <summary>Gold/Platinum/Diamond mini-cubes on the dice ring; revealed as roll-streak skills unlock (future).</summary>
-        public GameObject[] streakCubes;
+        [Header("Spin Streaks (Gold / Platinum / Diamond)")]
+        /// <summary>Chip roots on the spin frame (0=Gold, 1=Platinum, 2=Diamond); hidden until their skill unlocks.</summary>
+        public GameObject[] streakChips;
+        /// <summary>Radial fill on each chip (same order), 0..1 progress to its next streak roll.</summary>
+        public Image[] streakFills;
+        /// <summary>Roll ring around the SPIN button — fills as the dice spins; uses a tube-look sprite
+        /// (dark in the middle, lighter at the edges) tinted to the current roll-type colour.</summary>
+        public Image spinFill;
+        /// <summary>The SPIN button graphic; tinted to the rarest armed streak colour, else its base blue.</summary>
+        public Image spinButtonBg;
+        /// <summary>Ring border just outside the SPIN button; turns a darker streak colour when armed.</summary>
+        public Image spinBorder;
+        /// <summary>"x/10" counter under the SPIN button (Gold streak); blank until Gold is unlocked.</summary>
+        public Text spinCounterText;
+
+        /// <summary>Rolls per streak: Gold=10, Platinum=50, Diamond=100.</summary>
+        public readonly int[] streakThresholds = { 10, 50, 100 };
+        /// <summary>Luck multiplier applied on a streak roll: Gold ×2, Platinum ×5, Diamond ×10.</summary>
+        public readonly float[] streakMult = { 2f, 5f, 10f };
+        public bool[] streakUnlocked = new bool[3];
+        /// <summary>rollCount at the moment each streak was unlocked — progress counts from here, so streaks
+        /// unlocked at different times don't all line up and fire on the same roll.</summary>
+        public int[] streakStart = { 0, 0, 0 };
+        // SPIN button colour per roll type (0 Gold, 1 Platinum, 2 Diamond)
+        static readonly Color[] StreakArmCols = {
+            new Color(1f, 0.84f, 0.25f, 1f), new Color(0.80f, 0.84f, 0.92f, 1f), new Color(0.45f, 0.84f, 0.98f, 1f),
+        };
+        // roll ring: inner (bright original colour) + outer (a bit darker) per roll type
+        // roll-ring tint per roll type (the tube sprite shades the middle darker automatically)
+        static readonly Color[] StreakRingInner = {
+            new Color(1f, 0.82f, 0.22f, 1f), new Color(0.82f, 0.86f, 0.94f, 1f), new Color(0.50f, 0.86f, 1f, 1f),
+        };
+        // default (normal, non-streak roll): green button + green ring
+        static readonly Color DefaultBtn = new Color(0.30f, 0.62f, 0.34f, 1f);
+        static readonly Color DefaultRingInner = new Color(0.42f, 0.78f, 0.42f, 1f);
 
         /// <summary>Raised whenever owned counts or gold change (inventory UI listens).</summary>
         public System.Action OnInventoryChanged;
@@ -108,9 +140,62 @@ namespace SlimeRPG
                 popupRoot.SetActive(false); // hidden until the first roll
             }
             if (cooldownOverlay != null) cooldownOverlay.fillAmount = 0f; // ready
+            if (spinFill != null) spinFill.fillAmount = 0f;               // roll ring empty until the first roll
             UpdateGoldUI();
             UpdateLuckUI();
             UpdateCollectionBadge();
+            UpdateStreakUI();
+        }
+
+        /// <summary>Reveal a streak chip (0=Gold, 1=Platinum, 2=Diamond) — called by its skill node.</summary>
+        public void UnlockStreak(int i)
+        {
+            if (i < 0 || i >= 3) return;
+            streakUnlocked[i] = true;
+            streakStart[i] = rollCount; // start counting this streak from now, not from the very first roll
+            if (streakChips != null && i < streakChips.Length && streakChips[i] != null) streakChips[i].SetActive(true);
+            UpdateStreakUI();
+        }
+
+        /// <summary>Progress into streak i's current cycle, 0..thr — counts rolls SINCE that streak was unlocked
+        /// (1..thr across the cycle, thr on the streak roll itself), so the display never skips and unrelated
+        /// streaks don't all fire on the same roll.</summary>
+        int StreakProgress(int i)
+        {
+            int thr = streakThresholds[i];
+            int rel = rollCount - streakStart[i];
+            return rel <= 0 ? 0 : ((rel - 1) % thr) + 1;
+        }
+
+        /// <summary>Refresh the streak chip fills, the SPIN button tint + border, and the Gold counter.</summary>
+        public void UpdateStreakUI()
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                float fill = (float)StreakProgress(i) / streakThresholds[i];  // fills 0→full across the cycle
+                if (streakFills != null && i < streakFills.Length && streakFills[i] != null)
+                    streakFills[i].fillAmount = streakUnlocked[i] ? fill : 0f;
+            }
+
+            // counter tracks the Gold streak (index 0). The ring around the SPIN button is the roll/cooldown
+            // animation (driven in CooldownRoutine), NOT the streak — only the Gold chip's ring shows streak.
+            if (spinCounterText != null)
+            {
+                int gthr = streakThresholds[0];
+                spinCounterText.text = streakUnlocked[0] ? (StreakProgress(0) + "/" + gthr) : "";
+                var pill = spinCounterText.transform.parent;
+                if (pill != null) pill.gameObject.SetActive(streakUnlocked[0]);
+            }
+
+            // colour the SPIN button + roll ring by the CURRENT roll type: green by default, or this streak's
+            // own colour (inner bright + darker outer) on EXACTLY the streak roll itself (10th/50th/100th). Rarest wins.
+            int armed = -1;
+            for (int i = 2; i >= 0; i--)
+                if (streakUnlocked[i] && StreakProgress(i) == streakThresholds[i]) { armed = i; break; }
+            Color btn = armed >= 0 ? StreakArmCols[armed] : DefaultBtn;
+            Color ring = armed >= 0 ? StreakRingInner[armed] : DefaultRingInner;
+            if (spinButtonBg != null) spinButtonBg.color = btn;
+            if (spinFill != null) spinFill.color = ring; // tube sprite shades the middle darker on its own
         }
 
         void Update()
@@ -127,11 +212,20 @@ namespace SlimeRPG
             rollCount++;
             if (rollLabel != null && rollCount == 1) rollLabel.SetActive(false); // only show "TAP TO ROLL" before the first roll
 
+            // streak rolls (every 10th/50th/100th SINCE UNLOCK) spike luck; bonuses stack multiplicatively
+            float luckBonus = 1f;
+            for (int i = 0; i < 3; i++)
+            {
+                int rel = rollCount - streakStart[i];
+                if (streakUnlocked[i] && rel > 0 && rel % streakThresholds[i] == 0) luckBonus *= streakMult[i];
+            }
+            float effLuck = luckMultiplier * luckBonus;
+
             float total = 0f;
             var w = new float[rarities.Count];
             for (int i = 0; i < rarities.Count; i++)
             {
-                w[i] = rarities[i].baseWeight * Mathf.Pow(luckMultiplier, i);
+                w[i] = rarities[i].baseWeight * Mathf.Pow(effLuck, i);
                 total += w[i];
             }
             float r = Random.value * total;
@@ -151,6 +245,7 @@ namespace SlimeRPG
             Debug.Log($"<color=#{hex}>● [Roll #{rollCount}] {got.name}{(isNew ? " (NEW!)" : "")}  (base 1/{got.Denominator})  — now own x{owned[picked]}</color>");
 
             OnInventoryChanged?.Invoke();
+            UpdateStreakUI();
             if (diceSpinner != null) diceSpinner.Spin(got.color);
             // equip + reveal happen once the reel LANDS (not at roll start), so auto-equip waits for the animation
             if (diceSpinner != null && Application.isPlaying) StartCoroutine(RevealAfter(diceSpinner.spinDuration, got, isNew, picked));
@@ -163,14 +258,18 @@ namespace SlimeRPG
         {
             _cooling = true;
             if (cooldownOverlay != null) cooldownOverlay.fillAmount = 1f;
+            if (spinFill != null) spinFill.fillAmount = 0f; // roll ring starts empty, fills as the dice spins
+            float spin = diceSpinner != null ? diceSpinner.spinDuration : 2f;
             float t = 0f;
             while (t < rollCooldown)
             {
                 t += Time.deltaTime;
                 if (cooldownOverlay != null) cooldownOverlay.fillAmount = 1f - (t / rollCooldown);
+                if (spinFill != null) spinFill.fillAmount = Mathf.Clamp01(t / spin); // full once the spin reveals the slime
                 yield return null;
             }
             if (cooldownOverlay != null) cooldownOverlay.fillAmount = 0f; // ready again
+            if (spinFill != null) spinFill.fillAmount = 1f; // stays full after the slime is rolled, until the next roll
             _cooling = false;
         }
 
@@ -265,12 +364,12 @@ namespace SlimeRPG
         IEnumerator FloatReveal(RectTransform rt, CanvasGroup cg)
         {
             Vector2 start = rt.anchoredPosition;
-            float dur = 1.2f, tm = 0f;
+            float dur = 2.1f, tm = 0f; // linger longer so the player can read what they got
             while (tm < dur && rt != null)
             {
                 tm += Time.deltaTime; float u = tm / dur;
-                rt.anchoredPosition = start + new Vector2(0, 80f * u);
-                if (cg != null) cg.alpha = u < 0.65f ? 1f : Mathf.Clamp01((1f - u) / 0.35f);
+                rt.anchoredPosition = start + new Vector2(0, 70f * u);
+                if (cg != null) cg.alpha = u < 0.78f ? 1f : Mathf.Clamp01((1f - u) / 0.22f);
                 yield return null;
             }
             if (rt != null) Destroy(rt.gameObject);

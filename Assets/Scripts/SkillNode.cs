@@ -12,7 +12,7 @@ namespace SlimeRPG
     public class SkillNode : MonoBehaviour
     {
         public enum State { Hidden, Available, Purchased }
-        public enum Effect { None, HeroSlot, Luck, Damage, Gold, Crit, Speed, AutoRoll, Spin }
+        public enum Effect { None, HeroSlot, Luck, Damage, Gold, Crit, Speed, AutoRoll, Spin, GoldRoll, PlatinumRoll, DiamondRoll }
 
         public State state = State.Hidden;
         public Effect effect = Effect.None;
@@ -99,6 +99,9 @@ namespace SlimeRPG
                 case Effect.Speed: if (combat != null) combat.tickInterval = Mathf.Max(0.15f, combat.tickInterval * 0.9f); break;
                 case Effect.AutoRoll: if (roller != null) roller.autoRoll = true; break;
                 case Effect.Spin: if (spinner != null) spinner.SpeedUp(0.8f); break; // dice spins 20% faster
+                case Effect.GoldRoll: if (roller != null) roller.UnlockStreak(0); break;     // every 10th roll: ×2 luck
+                case Effect.PlatinumRoll: if (roller != null) roller.UnlockStreak(1); break;  // every 50th roll: ×5 luck
+                case Effect.DiamondRoll: if (roller != null) roller.UnlockStreak(2); break;   // every 100th roll: ×10 luck
             }
         }
 
