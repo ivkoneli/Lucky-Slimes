@@ -41,12 +41,6 @@ namespace SlimeRPG.EditorTools
         static readonly Color EnemyCol     = new Color(0.78f, 0.34f, 0.42f, 1f);
         static readonly Color EyeDark      = new Color(0.12f, 0.12f, 0.15f, 1f);
 
-        static readonly string[] RarityNames = { "Common Slime 1", "Common Slime 2", "Common Slime 3", "Common Slime 4", "Common Slime 5" };
-        static readonly Color[] RarityCols = {
-            new Color(0.62f, 0.65f, 0.70f), new Color(0.35f, 0.82f, 0.40f), new Color(0.28f, 0.55f, 1f),
-            new Color(0.70f, 0.35f, 1f), new Color(1f, 0.80f, 0.16f)
-        };
-
         [MenuItem("Slime RPG/Build Home Screen")]
         public static void Build()
         {
@@ -467,7 +461,7 @@ namespace SlimeRPG.EditorTools
                 por.sizeDelta = new Vector2(120, 120); por.anchoredPosition = new Vector2(18, 0); portrait.raycastTarget = false;
                 var portIn = MakeRounded("In", portrait.transform, new Color(0.10f, 0.12f, 0.15f, 1f));
                 var pinr = portIn.rectTransform; pinr.anchorMin = Vector2.zero; pinr.anchorMax = Vector2.one; pinr.offsetMin = new Vector2(6, 6); pinr.offsetMax = new Vector2(-6, -6); portIn.raycastTarget = false;
-                var mini = MakeCircle("Mini", portIn.transform, RarityCols[0]);
+                var mini = MakeCircle("Mini", portIn.transform, SlimeCatalog.Border(0));
                 var mr = mini.rectTransform; mr.anchorMin = mr.anchorMax = new Vector2(0.5f, 0.5f); mr.pivot = new Vector2(0.5f, 0.5f);
                 mr.sizeDelta = new Vector2(94, 94); mr.anchoredPosition = Vector2.zero;
                 mini.raycastTarget = false; AddFace(mini.transform, 94f); mini.gameObject.SetActive(false);
@@ -594,7 +588,7 @@ namespace SlimeRPG.EditorTools
 
             // reel: a SLIME FACE (body + eyes) flashing over the button while spinning; "2X" frame mixed in
             float reelD = btnDia * 0.9f;
-            var reel = MakeCircle("DiceReel", frame.transform, RarityCols[0]);
+            var reel = MakeCircle("DiceReel", frame.transform, SlimeCatalog.Border(0));
             var rlr = reel.rectTransform; rlr.anchorMin = rlr.anchorMax = new Vector2(0.5f, 0.5f); rlr.pivot = new Vector2(0.5f, 0.5f);
             rlr.sizeDelta = new Vector2(reelD, reelD); rlr.anchoredPosition = Vector2.zero;
             reel.raycastTarget = false;
@@ -611,7 +605,7 @@ namespace SlimeRPG.EditorTools
             reelTxt.gameObject.SetActive(false);
             reel.gameObject.SetActive(false);
             diceSpinner.reelIcon = reel; diceSpinner.reelEyes = reelEyes; diceSpinner.reelText = reelTxt;
-            diceSpinner.reelColors = (Color[])RarityCols.Clone();
+            diceSpinner.reelColors = (Color[])SlimeCatalog.TierBorder.Clone();
 
             // "x/10" counter pill below the button (Gold streak); hidden until Gold Roll unlocks
             var pill = MakeRounded("CounterPill", frame.transform, new Color(0.08f, 0.09f, 0.12f, 0.95f));
@@ -797,7 +791,7 @@ namespace SlimeRPG.EditorTools
                 var sqr = sq.rectTransform; sqr.anchorMin = sqr.anchorMax = new Vector2(0, 0.5f); sqr.pivot = new Vector2(0, 0.5f);
                 sqr.sizeDelta = new Vector2(slotW, slotW); sqr.anchoredPosition = new Vector2(slotGap + i * (slotW + slotGap), 0);
                 equipBtns[i] = sq.gameObject.AddComponent<Button>(); equipBtns[i].targetGraphic = sq;
-                var icon = MakeCircle("Icon", sq.transform, RarityCols[0]);
+                var icon = MakeCircle("Icon", sq.transform, SlimeCatalog.Border(0));
                 var icr = icon.rectTransform; icr.anchorMin = icr.anchorMax = new Vector2(0.5f, 0.5f); icr.pivot = new Vector2(0.5f, 0.5f); icr.sizeDelta = new Vector2(104, 104); icr.anchoredPosition = Vector2.zero;
                 icon.raycastTarget = false; AddFace(icon.transform, 104f); icon.gameObject.SetActive(false); equipIcons[i] = icon;
                 var lockOv = MakePanel("Lock", sq.transform, new Color(0.05f, 0.06f, 0.08f, 0.97f));
@@ -824,7 +818,8 @@ namespace SlimeRPG.EditorTools
             var ivFitter = ivContentGO.GetComponent<ContentSizeFitter>(); ivFitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize; ivFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
             invScroll.content = ivc;
 
-            int n = RarityNames.Length;
+            var pool = SlimeCatalog.BuildPool();
+            int n = pool.Count;
             var invBtns = new Button[n]; var invFrames = new Image[n]; var invIcons = new Image[n]; var invCounts = new Text[n];
             var invSellBtns = new Button[n]; var invEquipBtns = new Button[n];
             Color frameOff = new Color(0.10f, 0.11f, 0.14f, 1f);
@@ -840,7 +835,7 @@ namespace SlimeRPG.EditorTools
                 cellBtn.targetGraphic = bg;
                 var cbk = cellBtn.colors; cbk.normalColor = cellBg; cbk.highlightedColor = new Color(0.20f, 0.24f, 0.30f, 1f); cbk.pressedColor = new Color(0.26f, 0.32f, 0.40f, 1f); cbk.selectedColor = cellBg; cbk.fadeDuration = 0.08f; cellBtn.colors = cbk;
 
-                var icon = MakeCircle("Icon", bg.transform, RarityCols[i]);
+                var icon = MakeCircle("Icon", bg.transform, pool[i].color);
                 var icr = icon.rectTransform; icr.anchorMin = icr.anchorMax = new Vector2(0.5f, 1); icr.pivot = new Vector2(0.5f, 1); icr.sizeDelta = new Vector2(110, 110); icr.anchoredPosition = new Vector2(0, -14);
                 icon.raycastTarget = false; AddFace(icon.transform, 110f); invIcons[i] = icon;
 
@@ -849,7 +844,7 @@ namespace SlimeRPG.EditorTools
                 invCounts[i] = cnt;
 
                 // name right below the image
-                var nm = MakeText("Name", bg.transform, RarityNames[i], 24, RarityCols[i], TextAnchor.MiddleCenter); nm.raycastTarget = false;
+                var nm = MakeText("Name", bg.transform, pool[i].name, 22, pool[i].color, TextAnchor.MiddleCenter); nm.raycastTarget = false;
                 var nmr = nm.rectTransform; nmr.anchorMin = new Vector2(0, 1); nmr.anchorMax = new Vector2(1, 1); nmr.pivot = new Vector2(0.5f, 1); nmr.sizeDelta = new Vector2(-8, 40); nmr.anchoredPosition = new Vector2(0, -130);
 
                 // Sell + Equip stacked at the bottom
@@ -904,7 +899,7 @@ namespace SlimeRPG.EditorTools
             tbr.sizeDelta = new Vector2(390, 46); tbr.anchoredPosition = new Vector2(-132, -52);
             var topFill = MakeRounded("Fill", topBg.transform, ProgressBlue);
             var tfr = topFill.rectTransform; tfr.anchorMin = new Vector2(0, 0); tfr.anchorMax = new Vector2(0, 1); tfr.pivot = new Vector2(0, 0.5f); tfr.offsetMin = Vector2.zero; tfr.offsetMax = Vector2.zero; topFill.raycastTarget = false;
-            var topCount = MakeText("Count", topBg.transform, "0/100", 28, Color.white, TextAnchor.MiddleCenter); topCount.fontStyle = FontStyle.Bold; topCount.raycastTarget = false; Stretch(topCount.rectTransform);
+            var topCount = MakeText("Count", topBg.transform, "0/50", 28, Color.white, TextAnchor.MiddleCenter); topCount.fontStyle = FontStyle.Bold; topCount.raycastTarget = false; Stretch(topCount.rectTransform);
 
             var scrollGO = new GameObject("Scroll", typeof(RectTransform), typeof(Image), typeof(ScrollRect));
             scrollGO.transform.SetParent(card.transform, false);
@@ -923,28 +918,43 @@ namespace SlimeRPG.EditorTools
             var fit = contentGO.GetComponent<ContentSizeFitter>(); fit.horizontalFit = ContentSizeFitter.FitMode.PreferredSize; fit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
             scroll.content = cc;
 
-            int n = RarityNames.Length;
-            var icons = new Image[n]; var eyesArr = new GameObject[n]; var names = new Text[n]; var chances = new Text[n]; var dots = new GameObject[n]; var cellBtns = new Button[n];
+            var pool = SlimeCatalog.BuildPool();
+            int n = pool.Count;
+            var icons = new Image[n]; var eyesArr = new GameObject[n]; var names = new Text[n]; var chances = new Text[n]; var dots = new GameObject[n]; var cellBtns = new Button[n]; var borders = new Image[n]; var qmarks = new GameObject[n];
             for (int i = 0; i < n; i++)
             {
-                var cell = MakePanel("Coll_" + i, contentGO.transform, new Color(0.13f, 0.15f, 0.18f, 1f));
-                var cellBtn = cell.gameObject.AddComponent<Button>(); cellBtn.targetGraphic = cell; cellBtns[i] = cellBtn;
-                var body = MakeCircle("Body", cell.transform, new Color(0.20f, 0.22f, 0.26f));
+                // outer frame = rarity BORDER (tier colour once obtained); inner = dark card bg
+                var frame = MakePanel("Coll_" + i, contentGO.transform, new Color(0.20f, 0.22f, 0.26f, 1f));
+                borders[i] = frame;
+                var cellBtn = frame.gameObject.AddComponent<Button>(); cellBtns[i] = cellBtn;
+                var bg = MakePanel("Bg", frame.transform, new Color(0.11f, 0.13f, 0.16f, 1f));
+                var bgr = bg.rectTransform; bgr.anchorMin = Vector2.zero; bgr.anchorMax = Vector2.one; bgr.offsetMin = new Vector2(6, 6); bgr.offsetMax = new Vector2(-6, -6);
+                cellBtn.targetGraphic = bg;
+
+                var body = MakeCircle("Body", bg.transform, new Color(0.20f, 0.22f, 0.26f));
                 var bdr = body.rectTransform; bdr.anchorMin = bdr.anchorMax = new Vector2(0.5f, 1); bdr.pivot = new Vector2(0.5f, 1); bdr.sizeDelta = new Vector2(120, 120); bdr.anchoredPosition = new Vector2(0, -16);
                 body.raycastTarget = false; icons[i] = body;
+                var sh = body.gameObject.AddComponent<Shadow>(); sh.effectColor = new Color(0f, 0f, 0f, 0.55f); sh.effectDistance = new Vector2(3, -5);
+
                 var eyes = new GameObject("Eyes", typeof(RectTransform)); eyes.transform.SetParent(body.transform, false); Stretch(eyes.GetComponent<RectTransform>());
                 float eo = 120 * 0.16f, eye = 120 * 0.17f, ey = 120 * 0.06f;
                 var eL = MakeCircle("EyeL", eyes.transform, EyeDark); eL.raycastTarget = false; var eLr = eL.rectTransform; eLr.anchorMin = eLr.anchorMax = new Vector2(0.5f, 0.5f); eLr.pivot = new Vector2(0.5f, 0.5f); eLr.sizeDelta = new Vector2(eye, eye); eLr.anchoredPosition = new Vector2(-eo, ey);
                 var eR = MakeCircle("EyeR", eyes.transform, EyeDark); eR.raycastTarget = false; var eRr = eR.rectTransform; eRr.anchorMin = eRr.anchorMax = new Vector2(0.5f, 0.5f); eRr.pivot = new Vector2(0.5f, 0.5f); eRr.sizeDelta = new Vector2(eye, eye); eRr.anchoredPosition = new Vector2(eo, ey);
                 eyes.SetActive(false); eyesArr[i] = eyes;
-                var nm = MakeText("Name", cell.transform, "???", 24, SubTextCol, TextAnchor.MiddleCenter); nm.raycastTarget = false;
+
+                // "?" on the silhouette until obtained
+                var q = MakeText("Q", body.transform, "?", 64, new Color(0.78f, 0.81f, 0.88f, 1f), TextAnchor.MiddleCenter); q.fontStyle = FontStyle.Bold; q.raycastTarget = false; Stretch(q.rectTransform); qmarks[i] = q.gameObject;
+
+                var nm = MakeText("Name", bg.transform, pool[i].name, 22, SubTextCol, TextAnchor.MiddleCenter); nm.raycastTarget = false;
                 var nmr = nm.rectTransform; nmr.anchorMin = new Vector2(0, 1); nmr.anchorMax = new Vector2(1, 1); nmr.pivot = new Vector2(0.5f, 1); nmr.sizeDelta = new Vector2(-8, 40); nmr.anchoredPosition = new Vector2(0, -142);
-                names[i] = nm;
-                var ch = MakeText("Chance", cell.transform, "1/?", 30, GoldCol, TextAnchor.MiddleCenter); ch.raycastTarget = false;
+                nm.gameObject.SetActive(false); names[i] = nm;
+
+                var ch = MakeText("Chance", bg.transform, "1/?", 28, GoldCol, TextAnchor.MiddleCenter); ch.raycastTarget = false;
                 var chr = ch.rectTransform; chr.anchorMin = new Vector2(0, 0); chr.anchorMax = new Vector2(1, 0); chr.pivot = new Vector2(0.5f, 0); chr.sizeDelta = new Vector2(-8, 50); chr.anchoredPosition = new Vector2(0, 18);
-                chances[i] = ch;
-                // "new slime" red dot (top-right of the cell), hidden until this slime is collected + unseen
-                var dot = MakeCircle("NewDot", cell.transform, new Color(0.86f, 0.26f, 0.30f, 1f));
+                ch.gameObject.SetActive(false); chances[i] = ch;
+
+                // "claim 10 gems" red dot (top-right corner), hidden until this slime is collected + unclaimed
+                var dot = MakeCircle("NewDot", frame.transform, new Color(0.86f, 0.26f, 0.30f, 1f));
                 var dr = dot.rectTransform; dr.anchorMin = dr.anchorMax = new Vector2(1, 1); dr.pivot = new Vector2(1, 1); dr.sizeDelta = new Vector2(34, 34); dr.anchoredPosition = new Vector2(-10, -10);
                 dot.raycastTarget = false; dot.gameObject.SetActive(false); dots[i] = dot.gameObject;
             }
@@ -968,7 +978,7 @@ namespace SlimeRPG.EditorTools
             var cdr = claimDot.rectTransform; cdr.anchorMin = cdr.anchorMax = new Vector2(1, 1); cdr.pivot = new Vector2(1, 1); cdr.sizeDelta = new Vector2(34, 34); cdr.anchoredPosition = new Vector2(-6, -6);
             claimDot.raycastTarget = false; claimDot.gameObject.SetActive(false);
 
-            ui.icons = icons; ui.eyes = eyesArr; ui.names = names; ui.chances = chances; ui.newDots = dots; ui.cells = cellBtns;
+            ui.icons = icons; ui.eyes = eyesArr; ui.names = names; ui.chances = chances; ui.newDots = dots; ui.cells = cellBtns; ui.borders = borders; ui.qmarks = qmarks;
             ui.topCountText = topCount; ui.topFill = topFill.rectTransform;
             ui.rewardLabel = rewardLabel; ui.rewardFill = rewardFill.rectTransform;
             ui.claimButton = claimBtn; ui.claimDot = claimDot.gameObject;

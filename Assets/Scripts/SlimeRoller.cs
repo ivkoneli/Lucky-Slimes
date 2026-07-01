@@ -11,8 +11,10 @@ namespace SlimeRPG
         public string name;
         public Color color = Color.white;
         public float baseWeight = 1f;
-        /// <summary>Base odds as the 1/x denominator (1/2 -> 2, 1/8 -> 8).</summary>
-        public int Denominator => Mathf.Max(1, Mathf.RoundToInt(1f / Mathf.Max(0.0001f, baseWeight)));
+        /// <summary>Rarity tier 0..6 (Common..Divine) — drives luck weighting, stats, and the card border colour.</summary>
+        public int tier;
+        /// <summary>Base odds as the 1/x denominator (1/2 -> 2, 1/50000 -> 50000).</summary>
+        public int Denominator => Mathf.Max(1, Mathf.RoundToInt(1f / Mathf.Max(1e-7f, baseWeight)));
     }
 
     /// <summary>
@@ -29,7 +31,6 @@ namespace SlimeRPG
         public float luckMultiplier = 1f;
 
         [Header("Economy")]
-        public int[] sellValues = { 5, 15, 60, 250, 1200 };
         public int[] owned;
         public int gold = 0;
         public int gems = 0;              // premium currency (earned from collection-set rewards)
@@ -120,15 +121,8 @@ namespace SlimeRPG
 
         public void SetupDefaultPool()
         {
-            // starter slimes — all "Common" rarity, distinguished by number + colour (stats/odds kept)
-            rarities = new List<SlimeRarity>
-            {
-                new SlimeRarity { name = "Common Slime 1", color = new Color(0.62f, 0.65f, 0.70f), baseWeight = 1f / 2f },
-                new SlimeRarity { name = "Common Slime 2", color = new Color(0.35f, 0.82f, 0.40f), baseWeight = 1f / 4f },
-                new SlimeRarity { name = "Common Slime 3", color = new Color(0.28f, 0.55f, 1.00f), baseWeight = 1f / 8f },
-                new SlimeRarity { name = "Common Slime 4", color = new Color(0.70f, 0.35f, 1.00f), baseWeight = 1f / 16f },
-                new SlimeRarity { name = "Common Slime 5", color = new Color(1.00f, 0.80f, 0.16f), baseWeight = 1f / 32f },
-            };
+            // 50-slime pool across 7 rarity tiers (Common..Divine) — see SlimeCatalog.
+            rarities = SlimeCatalog.BuildPool();
             EnsureOwned();
         }
 
@@ -234,7 +228,7 @@ namespace SlimeRPG
             var w = new float[rarities.Count];
             for (int i = 0; i < rarities.Count; i++)
             {
-                w[i] = rarities[i].baseWeight * Mathf.Pow(effLuck, i);
+                w[i] = rarities[i].baseWeight * Mathf.Pow(effLuck, rarities[i].tier);
                 total += w[i];
             }
             float r = Random.value * total;
@@ -402,9 +396,8 @@ namespace SlimeRPG
         public Color[] GetReelColors()
         {
             if (rarities == null || rarities.Count == 0) return null;
-            var list = new List<Color>(rarities.Count);
-            for (int i = 0; i < rarities.Count; i++) list.Add(rarities[i].color);
-            return list.ToArray();
+            // one colour per tier (a clean 7-colour slot reel), not all 50 slime shades
+            return (Color[])SlimeCatalog.TierBorder.Clone();
         }
 
         /// <summary>Sells all duplicate copies of a rarity (keeps 1). Returns gold gained.</summary>
@@ -414,7 +407,7 @@ namespace SlimeRPG
             if (idx < 0 || idx >= owned.Length) return 0;
             int dupes = owned[idx] - 1;
             if (dupes <= 0) return 0;
-            int val = (idx < sellValues.Length ? sellValues[idx] : 1) * dupes;
+            int val = SlimeCatalog.TierSell[rarities[idx].tier] * dupes;
             owned[idx] = 1;
             gold += val;
             UpdateGoldUI();

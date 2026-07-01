@@ -41,12 +41,8 @@ namespace SlimeRPG
 
         public System.Action OnTeamChanged;
 
-        static readonly Color[] RarityCols = {
-            new Color(0.62f, 0.65f, 0.70f), new Color(0.35f, 0.82f, 0.40f), new Color(0.28f, 0.55f, 1f),
-            new Color(0.70f, 0.35f, 1f), new Color(1f, 0.80f, 0.16f)
-        };
-        static readonly float[] HeroDps = { 6f, 12f, 24f, 50f, 110f };
-        static readonly float[] HeroHp  = { 80f, 140f, 260f, 520f, 1050f };
+        Color SlimeColor(int idx) => (roller != null && idx >= 0 && idx < roller.rarities.Count) ? roller.rarities[idx].color : Color.gray;
+        int SlimeTier(int idx) => (roller != null && idx >= 0 && idx < roller.rarities.Count) ? roller.rarities[idx].tier : 0;
         // cost to unlock the slot at this index (index 0 = slot 1, free)
         static readonly int[] SlotCosts = { 0, 100, 300, 800, 2000, 5000, 12000 };
 
@@ -190,7 +186,7 @@ namespace SlimeRPG
                 {
                     bool has = unlocked && equipped[i] >= 0;
                     slotMini[i].gameObject.SetActive(has);
-                    if (has) slotMini[i].color = RarityCols[equipped[i]];
+                    if (has) slotMini[i].color = SlimeColor(equipped[i]);
                 }
                 // "Equip" button on an unlocked-but-empty slot (where the slime icon would be)
                 if (slotEquipButtons != null && i < slotEquipButtons.Length && slotEquipButtons[i] != null)
@@ -234,7 +230,7 @@ namespace SlimeRPG
                 else if (_slotHeroes[i] == null || _slotRarity[i] != desired)
                 {
                     if (_slotHeroes[i] != null) Destroy(_slotHeroes[i].gameObject);
-                    _slotHeroes[i] = combat.CreateUnit(heroContainer, Vector2.zero, 122f, RarityCols[desired], true, HeroHp[desired], HeroDps[desired]);
+                    _slotHeroes[i] = combat.CreateUnit(heroContainer, Vector2.zero, 122f, SlimeColor(desired), true, SlimeCatalog.TierHp[SlimeTier(desired)], SlimeCatalog.TierDps[SlimeTier(desired)]);
                     _slotRarity[i] = desired;
                 }
                 // else: same rarity in this slot -> keep the existing hero (and its current HP)

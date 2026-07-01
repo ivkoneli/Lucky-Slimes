@@ -40,12 +40,7 @@ namespace SlimeRPG
 
         static readonly Color TabOn   = new Color(0.28f, 0.42f, 0.58f, 1f);
         static readonly Color TabOff  = new Color(0.16f, 0.18f, 0.22f, 1f);
-        static readonly Color FrameOff = new Color(0.10f, 0.11f, 0.14f, 1f); // unselected (subtle)
         static readonly Color FrameSel = new Color(0.45f, 0.74f, 1f, 1f);    // selected highlight
-        static readonly Color[] RarityCols = {
-            new Color(0.62f, 0.65f, 0.70f), new Color(0.35f, 0.82f, 0.40f), new Color(0.28f, 0.55f, 1f),
-            new Color(0.70f, 0.35f, 1f), new Color(1f, 0.80f, 0.16f)
-        };
 
         bool _wired;
 
@@ -106,9 +101,9 @@ namespace SlimeRPG
                     int eq = (team != null && unlocked && i < team.equipped.Length) ? team.equipped[i] : -1;
                     if (equipSlotIcons[i] != null)
                     {
-                        bool has = unlocked && eq >= 0;
+                        bool has = unlocked && eq >= 0 && eq < roller.rarities.Count;
                         equipSlotIcons[i].gameObject.SetActive(has);
-                        if (has) equipSlotIcons[i].color = RarityCols[eq];
+                        if (has) equipSlotIcons[i].color = roller.rarities[eq].color;
                     }
                 }
 
@@ -119,9 +114,11 @@ namespace SlimeRPG
                     int count = (r < roller.owned.Length) ? roller.owned[r] : 0;
                     bool show = count > 0;
                     if (invBtns[r] != null) invBtns[r].gameObject.SetActive(show);
-                    if (invIcons != null && r < invIcons.Length && invIcons[r] != null) invIcons[r].color = RarityCols[r];
+                    if (invIcons != null && r < invIcons.Length && invIcons[r] != null && r < roller.rarities.Count) invIcons[r].color = roller.rarities[r].color;
                     if (invCounts != null && r < invCounts.Length && invCounts[r] != null) invCounts[r].text = "x" + count;
-                    if (invFrames != null && r < invFrames.Length && invFrames[r] != null) invFrames[r].color = (r == selected) ? FrameSel : FrameOff;
+                    // frame doubles as the rarity BORDER (tier colour) normally, and the selection highlight when selected
+                    if (invFrames != null && r < invFrames.Length && invFrames[r] != null && r < roller.rarities.Count)
+                        invFrames[r].color = (r == selected) ? FrameSel : SlimeCatalog.Border(roller.rarities[r].tier);
                     // Sell/Equip buttons only appear on the selected slime
                     bool sel = show && r == selected;
                     if (invSellBtns != null && r < invSellBtns.Length && invSellBtns[r] != null) invSellBtns[r].gameObject.SetActive(sel);

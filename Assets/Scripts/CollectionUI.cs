@@ -19,6 +19,8 @@ namespace SlimeRPG
         public Text[] chances;
         public GameObject[] newDots; // red "claim 10 gems" dot per cell
         public Button[] cells;       // whole card is clickable to claim the slime's gem
+        public Image[] borders;      // per-card rarity border (tier colour once obtained)
+        public GameObject[] qmarks;  // "?" shown on un-obtained cards
 
         [Header("Top counter (unique collected / total)")]
         public Text topCountText;
@@ -30,19 +32,16 @@ namespace SlimeRPG
         public Button claimButton;
         public GameObject claimDot;  // red dot on the collect button when a reward is ready
 
-        /// <summary>Total slimes to collect (placeholder until the full 100-slime pool exists).</summary>
-        public const int TotalSlimes = 100;
+        /// <summary>Total slimes to collect (the full 7-tier pool = 50).</summary>
+        public const int TotalSlimes = 50;
         /// <summary>Gems granted per collection milestone.</summary>
         public const int RewardGems = 100;
 
         static readonly Color Silhouette = new Color(0.20f, 0.22f, 0.26f, 1f);
         static readonly Color QName = new Color(0.50f, 0.52f, 0.56f, 1f);
+        static readonly Color BorderIdle = new Color(0.20f, 0.22f, 0.26f, 1f);   // un-obtained card border
         static readonly Color ClaimReady = new Color(0.46f, 0.74f, 0.42f, 1f);   // green
         static readonly Color ClaimIdle = new Color(0.24f, 0.27f, 0.31f, 1f);    // dim gray
-        static readonly Color[] RarityCols = {
-            new Color(0.62f, 0.65f, 0.70f), new Color(0.35f, 0.82f, 0.40f), new Color(0.28f, 0.55f, 1f),
-            new Color(0.70f, 0.35f, 1f), new Color(1f, 0.80f, 0.16f)
-        };
 
         // Wire button listeners at runtime — listeners added from the editor build script aren't serialized.
         void Awake()
@@ -82,15 +81,21 @@ namespace SlimeRPG
             for (int i = 0; i < icons.Length; i++)
             {
                 bool owned = roller.owned != null && i < roller.owned.Length && roller.owned[i] > 0;
-                if (icons[i] != null) icons[i].color = owned ? RarityCols[i] : Silhouette;
+                Color tierCol = SlimeCatalog.Border(roller.rarities[i].tier);
+                if (icons[i] != null) icons[i].color = owned ? roller.rarities[i].color : Silhouette;
                 if (eyes != null && i < eyes.Length && eyes[i] != null) eyes[i].SetActive(owned);
+                if (qmarks != null && i < qmarks.Length && qmarks[i] != null) qmarks[i].SetActive(!owned);   // "?" until obtained
+                if (borders != null && i < borders.Length && borders[i] != null) borders[i].color = owned ? tierCol : BorderIdle;
                 if (names != null && i < names.Length && names[i] != null)
                 {
-                    names[i].text = owned ? roller.rarities[i].name : "???";
-                    names[i].color = owned ? RarityCols[i] : QName;
+                    names[i].gameObject.SetActive(owned);        // name hidden until obtained
+                    if (owned) { names[i].text = roller.rarities[i].name; names[i].color = tierCol; }
                 }
                 if (chances != null && i < chances.Length && chances[i] != null)
-                    chances[i].text = "1/" + roller.rarities[i].Denominator;
+                {
+                    chances[i].gameObject.SetActive(owned);      // drop rate revealed only once obtained
+                    if (owned) chances[i].text = "1/" + roller.rarities[i].Denominator;
+                }
                 if (newDots != null && i < newDots.Length && newDots[i] != null)
                     newDots[i].SetActive(roller.HasUnclaimedSlimeGem(i));
             }
