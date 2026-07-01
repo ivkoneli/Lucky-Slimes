@@ -70,7 +70,7 @@ namespace SlimeRPG.EditorTools
             BuildStageTitle(root, out Text stageNumText);
             var dots = BuildProgressRoad(root);
             BuildBossTimer(root, out GameObject bossTimerRoot, out Text bossTimerText);
-            BuildBottomSection(root, out Button diceBtn, out Image diceImg, out Image cooldownOverlay, out Button invBtn, out Button skillsBtn, out Button collectionBtn, out Image[] slotMini, out GameObject[] slotLock, out Button[] slotButtons, out Text[] slotButtonLabels, out GameObject[] slotCoins, out Text[] slotCostLabels, out Text[] slotLevelLabels, out Button[] slotEquipBtns, out DiceSpinner diceSpinner, out GameObject[] streakChips, out Image[] streakFills, out Image spinFill, out Text spinCounter, out Image spinBorder);
+            BuildBottomSection(root, out Button diceBtn, out Image diceImg, out Image cooldownOverlay, out Button invBtn, out Button skillsBtn, out Button collectionBtn, out Image[] slotMini, out GameObject[] slotLock, out Button[] slotButtons, out Text[] slotButtonLabels, out GameObject[] slotCoins, out Text[] slotCostLabels, out Text[] slotLevelLabels, out Text[] slotStatsLabels, out Text teamDpsLabel, out Button[] slotEquipBtns, out DiceSpinner diceSpinner, out GameObject[] streakChips, out Image[] streakFills, out Image spinFill, out Text spinCounter, out Image spinBorder);
             BuildPullPopup(root, out Text popupName, out Text popupChance, out GameObject popupRoot);
             var invUI = BuildInventoryPanel(root, out GameObject invPanel, out Button invClose);
             var collUI = BuildCollectionPanel(root, out GameObject collPanel, out Button collClose);
@@ -136,6 +136,8 @@ namespace SlimeRPG.EditorTools
             team.slotCoinIcons = slotCoins;
             team.slotCostLabels = slotCostLabels;
             team.slotLevelLabels = slotLevelLabels;
+            team.slotStatsLabels = slotStatsLabels;
+            team.teamDpsLabel = teamDpsLabel;
             team.slotEquipButtons = slotEquipBtns;
             team.unlockedSlots = 1;
             team.inventoryPanel = invPanel;
@@ -381,7 +383,7 @@ namespace SlimeRPG.EditorTools
 
         // ===== bottom: fixed navbar + scrollable 7-slot slime roster + dice dome =====
 
-        static void BuildBottomSection(Transform root, out Button diceBtn, out Image diceImg, out Image cooldownOverlay, out Button invBtn, out Button skillsBtn, out Button collectionBtn, out Image[] slotMini, out GameObject[] slotLock, out Button[] slotButtons, out Text[] slotButtonLabels, out GameObject[] slotCoins, out Text[] slotCostLabels, out Text[] slotLevelLabels, out Button[] slotEquipBtns, out DiceSpinner diceSpinner, out GameObject[] streakChips, out Image[] streakFills, out Image spinFill, out Text spinCounter, out Image spinBorder)
+        static void BuildBottomSection(Transform root, out Button diceBtn, out Image diceImg, out Image cooldownOverlay, out Button invBtn, out Button skillsBtn, out Button collectionBtn, out Image[] slotMini, out GameObject[] slotLock, out Button[] slotButtons, out Text[] slotButtonLabels, out GameObject[] slotCoins, out Text[] slotCostLabels, out Text[] slotLevelLabels, out Text[] slotStatsLabels, out Text teamDpsLabel, out Button[] slotEquipBtns, out DiceSpinner diceSpinner, out GameObject[] streakChips, out Image[] streakFills, out Image spinFill, out Text spinCounter, out Image spinBorder)
         {
             const int SLOTS = 7;
             Color cellFill = new Color(0.13f, 0.15f, 0.18f, 1f);
@@ -445,7 +447,18 @@ namespace SlimeRPG.EditorTools
             scroll.content = content;
 
             slotMini = new Image[SLOTS]; slotLock = new GameObject[SLOTS]; slotButtons = new Button[SLOTS]; slotButtonLabels = new Text[SLOTS];
-            slotCoins = new GameObject[SLOTS]; slotCostLabels = new Text[SLOTS]; slotLevelLabels = new Text[SLOTS]; slotEquipBtns = new Button[SLOTS];
+            slotCoins = new GameObject[SLOTS]; slotCostLabels = new Text[SLOTS]; slotLevelLabels = new Text[SLOTS]; slotStatsLabels = new Text[SLOTS]; slotEquipBtns = new Button[SLOTS];
+
+            // Team DPS readout — a rounded pill top-right, just under the Luck field
+            var dpsPill = MakeRounded("TeamDpsPill", root, PanelDark2);
+            var dpr = dpsPill.rectTransform; dpr.anchorMin = dpr.anchorMax = new Vector2(1, 1); dpr.pivot = new Vector2(1, 1);
+            dpr.sizeDelta = new Vector2(304, 60); dpr.anchoredPosition = new Vector2(-26, -108);
+            var dpsIcon = MakeCircle("Icon", dpsPill.transform, new Color(0.90f, 0.40f, 0.36f, 1f)); dpsIcon.raycastTarget = false;
+            var dpiR = dpsIcon.rectTransform; dpiR.anchorMin = dpiR.anchorMax = new Vector2(0, 0.5f); dpiR.pivot = new Vector2(0, 0.5f); dpiR.sizeDelta = new Vector2(32, 32); dpiR.anchoredPosition = new Vector2(18, 0);
+            teamDpsLabel = MakeText("Label", dpsPill.transform, "Team DPS  0", 30, new Color(0.98f, 0.70f, 0.60f, 1f), TextAnchor.MiddleLeft);
+            teamDpsLabel.raycastTarget = false;
+            var tdl = teamDpsLabel.rectTransform; tdl.anchorMin = Vector2.zero; tdl.anchorMax = Vector2.one; tdl.offsetMin = new Vector2(60, 0); tdl.offsetMax = new Vector2(-10, 0);
+
             for (int i = 0; i < SLOTS; i++)
             {
                 float y = -rowGap - i * (rowH + rowGap);
@@ -495,6 +508,12 @@ namespace SlimeRPG.EditorTools
                     var plus = MakeText("Plus", abIn.transform, "+", 42, new Color(0.56f, 0.86f, 0.52f), TextAnchor.MiddleCenter);
                     plus.fontStyle = FontStyle.Bold; plus.raycastTarget = false; BoldOutline(plus, 1); Stretch(plus.rectTransform);
                 }
+
+                // middle: live stats (DPS / HP / Crit) for the equipped hero — updated on level-up/equip
+                var stats = MakeText("Stats", rowFill.transform, "", 24, TextCol, TextAnchor.MiddleLeft); stats.raycastTarget = false;
+                var str = stats.rectTransform; str.anchorMin = str.anchorMax = new Vector2(0, 0.5f); str.pivot = new Vector2(0, 0.5f);
+                str.sizeDelta = new Vector2(360, 132); str.anchoredPosition = new Vector2(400, -4);
+                slotStatsLabels[i] = stats;
 
                 // right: Slot Upgrade / Unlock button
                 var btnPanel = MakePanel("SlotButton", rowFill.transform, new Color(0.28f, 0.42f, 0.58f, 1f));

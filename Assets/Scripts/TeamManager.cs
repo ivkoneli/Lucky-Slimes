@@ -24,6 +24,8 @@ namespace SlimeRPG
         public GameObject[] slotCoinIcons; // SlotCount — gold coin shown in the Upgrade state
         public Text[] slotCostLabels;      // SlotCount — upgrade/unlock gold cost
         public Text[] slotLevelLabels;     // SlotCount — "Lv N" per-slot upgrade level
+        public Text[] slotStatsLabels;     // SlotCount — live DPS/HP/Crit for the equipped hero
+        public Text teamDpsLabel;          // total team DPS readout
         public Button[] slotEquipButtons;  // SlotCount — "Equip" shown on an unlocked-but-empty slot -> opens inventory
         public Button unlockSlotButton;   // optional legacy button (Skill Tree); may be null
         public Text unlockSlotLabel;
@@ -59,7 +61,7 @@ namespace SlimeRPG
         void Start()
         {
             // Auto-equip ONLY the first slime (when the team is empty); after that the player equips manually.
-            if (roller != null) roller.OnRolled += OnFirstRollEquip;
+            if (roller != null) { roller.OnRolled += OnFirstRollEquip; roller.OnInventoryChanged += UpdateStats; } // skill nodes fire OnInventoryChanged -> refresh crit/dmg stats
             if (unlockSlotButton != null) unlockSlotButton.onClick.AddListener(() => UnlockSlot());
             if (slotButtons != null)
                 for (int i = 0; i < slotButtons.Length; i++)
@@ -74,7 +76,7 @@ namespace SlimeRPG
             RebuildHeroes();
         }
 
-        void OnDestroy() { if (roller != null) roller.OnRolled -= OnFirstRollEquip; }
+        void OnDestroy() { if (roller != null) { roller.OnRolled -= OnFirstRollEquip; roller.OnInventoryChanged -= UpdateStats; } }
 
         bool _autoEquippedFirst;
         void OnFirstRollEquip(int idx)
@@ -243,7 +245,39 @@ namespace SlimeRPG
                 int c = NextSlotCost();
                 unlockSlotLabel.text = c < 0 ? "Team Full (" + SlotCount + "/" + SlotCount + ")" : "Unlock Slot  (" + NumberFormat.Short(c) + "g)";
             }
+            UpdateStats();
             OnTeamChanged?.Invoke();
+        }
+
+        /// <summary>Refresh the per-slot DPS/HP/Crit labels and the total Team DPS readout (sustained DPS =
+        /// damage·damageMult/tickInterval; crit shown separately). Called on team changes + skill purchases.</summary>
+        public void UpdateStats()
+        {
+            float dmgMult = combat != null ? combat.damageMult : 1f;
+            float tick = (combat != null && combat.tickInterval > 0f) ? combat.tickInterval : 0.55f;
+            int critPct = Mathf.RoundToInt((combat != null ? combat.critChance : 0f) * 100f);
+            float totalDps = 0f;
+            for (int i = 0; i < SlotCount; i++)
+            {
+                bool has = i < unlockedSlots && equipped[i] >= 0;
+                Text lab = (slotStatsLabels != null && i < slotStatsLabels.Length) ? slotStatsLabels[i] : null;
+                if (has)
+                {
+                    int tier = SlimeTier(equipped[i]);
+                    float dps = SlimeCatalog.TierDps[tier] * SlotMult(i) * dmgMult / tick;
+                    float hp = SlimeCatalog.TierHp[tier] * SlotMult(i);
+                    totalDps += dps;
+                    if (lab != null)
+                    {
+                        lab.text = "<color=#FF9088>DPS</color> " + NumberFormat.Short(Mathf.RoundToInt(dps)) +
+                                   "\n<color=#8FE08F>HP</color> " + NumberFormat.Short(Mathf.RoundToInt(hp)) +
+                                   "\n<color=#FFD766>Crit</color> " + critPct + "%";
+                        lab.gameObject.SetActive(true);
+                    }
+                }
+                else if (lab != null) lab.gameObject.SetActive(false);
+            }
+            if (teamDpsLabel != null) teamDpsLabel.text = "Team DPS  " + NumberFormat.Short(Mathf.RoundToInt(totalDps));
         }
 
         /// <summary>
