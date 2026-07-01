@@ -32,12 +32,18 @@ namespace SlimeRPG
         public int[] sellValues = { 5, 15, 60, 250, 1200 };
         public int[] owned;
         public int gold = 0;
+        public int gems = 0;              // premium currency (earned from collection-set rewards)
         public int rollCount = 0;
+
+        [Header("Collection reward track")]
+        /// <summary>How many collection reward milestones have been claimed (drives the 5→10→15… ladder).</summary>
+        public int collectionClaimed = 0;
 
         [Header("UI References")]
         public Button diceButton;
         public Image diceImage;
         public Text goldText;
+        public Text gemsText;
         public Text luckText;
         public Text popupNameText;
         public Text popupChanceText;
@@ -53,10 +59,12 @@ namespace SlimeRPG
         public RectTransform plusOneAnchor; // the dice rect — floating "+1" spawns here on a duplicate
         public Font font;                   // for the floating "+1" text
 
-        [Header("Collection alert (badge on the Collection nav button)")]
+        [Header("Collection alert (red dot on the Collection nav button)")]
         public GameObject collectionBadge;
-        public Text collectionBadgeText;
-        bool[] _seen;
+        /// <summary>Per-slime: has the one-time 10-gem "new slime" reward been claimed (by clicking the card)?</summary>
+        public bool[] slimeGemClaimed;
+        /// <summary>Gems granted the first time you claim a newly-collected slime's card.</summary>
+        public const int UnlockGems = 10;
 
         [Header("Roll Cooldown")]
         public float rollCooldown = 3.3f; // 2s spin + ~1s result hold + small gap, so the pull is readable before the next roll
@@ -142,6 +150,7 @@ namespace SlimeRPG
             if (cooldownOverlay != null) cooldownOverlay.fillAmount = 0f; // ready
             if (spinFill != null) spinFill.fillAmount = 0f;               // roll ring empty until the first roll
             UpdateGoldUI();
+            UpdateGemsUI();
             UpdateLuckUI();
             UpdateCollectionBadge();
             UpdateStreakUI();
@@ -313,24 +322,33 @@ namespace SlimeRPG
             UpdateCollectionBadge();
         }
 
-        void EnsureSeen() { if (_seen == null || _seen.Length != (rarities?.Count ?? 0)) _seen = new bool[rarities?.Count ?? 0]; }
+        void EnsureClaimed() { if (slimeGemClaimed == null || slimeGemClaimed.Length != (rarities?.Count ?? 0)) slimeGemClaimed = new bool[rarities?.Count ?? 0]; }
 
-        /// <summary>Shows "(N)" on the Collection nav button = owned slimes not yet viewed in the Collection.</summary>
+        /// <summary>Show the red dot on the Collection nav button when anything in the Collection is claimable
+        /// (an unclaimed new-slime gem, or the milestone reward is ready).</summary>
         public void UpdateCollectionBadge()
         {
-            EnsureOwned(); EnsureSeen();
-            int n = 0;
-            for (int i = 0; i < owned.Length && i < _seen.Length; i++) if (owned[i] > 0 && !_seen[i]) n++;
-            if (collectionBadge != null) collectionBadge.SetActive(n > 0);
-            if (collectionBadgeText != null) collectionBadgeText.text = n.ToString();
+            EnsureOwned(); EnsureClaimed();
+            bool any = CollectionMilestoneReady();
+            for (int i = 0; i < owned.Length && i < slimeGemClaimed.Length && !any; i++) if (owned[i] > 0 && !slimeGemClaimed[i]) any = true;
+            if (collectionBadge != null) collectionBadge.SetActive(any);
         }
 
-        /// <summary>Mark every owned slime as viewed (call when the Collection opens) and clear the badge.</summary>
-        public void MarkCollectionSeen()
+        /// <summary>True if slime i is owned but its one-time 10-gem card reward hasn't been claimed (drives the per-cell red dot).</summary>
+        public bool HasUnclaimedSlimeGem(int i)
         {
-            EnsureOwned(); EnsureSeen();
-            for (int i = 0; i < owned.Length && i < _seen.Length; i++) if (owned[i] > 0) _seen[i] = true;
+            EnsureOwned(); EnsureClaimed();
+            return i >= 0 && i < owned.Length && i < slimeGemClaimed.Length && owned[i] > 0 && !slimeGemClaimed[i];
+        }
+
+        /// <summary>Claim slime i's one-time 10-gem reward (from clicking its Collection card). Returns true if granted.</summary>
+        public bool ClaimSlimeGem(int i)
+        {
+            if (!HasUnclaimedSlimeGem(i)) return false;
+            slimeGemClaimed[i] = true;
+            AddGems(UnlockGems);
             UpdateCollectionBadge();
+            return true;
         }
 
         /// <summary>Small floater out of the dice: "+1" (or "NEW!") + the slime's name, in its colour.</summary>
@@ -405,7 +423,38 @@ namespace SlimeRPG
         }
 
         public void UpdateGoldUI() { if (goldText != null) goldText.text = NumberFormat.Short(gold); }
+        public void UpdateGemsUI() { if (gemsText != null) gemsText.text = NumberFormat.Short(gems); }
+        public void AddGems(int n) { gems += n; UpdateGemsUI(); }
         // Luck shown as a multiplier: 100% -> 1x, 150% -> 1.5x, 200% -> 2x.
         public void UpdateLuckUI() { if (luckText != null) luckText.text = "Luck " + luckMultiplier.ToString("0.##") + "x"; }
+
+        /// <summary>Number of distinct slimes owned (owned[i] &gt; 0).</summary>
+        public int UniqueCollected()
+        {
+            EnsureOwned();
+            int n = 0;
+            for (int i = 0; i < owned.Length; i++) if (owned[i] > 0) n++;
+            return n;
+        }
+
+        /// <summary>Number of slimes whose one-time 10-gem reward has been collected — this (NOT mere ownership)
+        /// drives the counter + milestone bars, so a slime only counts once its card reward is picked up.</summary>
+        public int ClaimedSlimeCount()
+        {
+            EnsureClaimed();
+            int n = 0;
+            for (int i = 0; i < slimeGemClaimed.Length; i++) if (slimeGemClaimed[i]) n++;
+            return n;
+        }
+
+        // ---- collection milestone track (5 -> 10 -> 15 … uniques, 100 gems each) ----
+        /// <summary>Uniques needed within the current milestone segment.</summary>
+        public int CollectionTarget => 5 * (collectionClaimed + 1);
+        /// <summary>Total uniques already accounted for by claimed milestones (5·(1+2+…+claimed)).</summary>
+        public int CollectionSegmentBase => 5 * collectionClaimed * (collectionClaimed + 1) / 2;
+        /// <summary>Progress into the current milestone segment, counted in COLLECTED slimes (may exceed target until claimed).</summary>
+        public int CollectionProgress => ClaimedSlimeCount() - CollectionSegmentBase;
+        /// <summary>Is the current milestone reward ready to collect?</summary>
+        public bool CollectionMilestoneReady() => CollectionProgress >= CollectionTarget;
     }
 }

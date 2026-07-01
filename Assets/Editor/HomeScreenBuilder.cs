@@ -34,6 +34,7 @@ namespace SlimeRPG.EditorTools
         static readonly Color ForestDim  = new Color(0.22f, 0.34f, 0.22f, 1f);
         static readonly Color GoldCol     = new Color(1f, 0.84f, 0.25f, 1f);
         static readonly Color GemCol      = new Color(0.45f, 0.80f, 1f, 1f);
+        static readonly Color ProgressBlue = new Color(0.30f, 0.60f, 1f, 1f); // collection progress-bar fill
         static readonly Color TextCol     = new Color(0.92f, 0.94f, 0.97f, 1f);
         static readonly Color SubTextCol  = new Color(0.66f, 0.69f, 0.75f, 1f);
         static readonly Color DiceCol     = new Color(0.96f, 0.96f, 0.98f, 1f);
@@ -71,7 +72,7 @@ namespace SlimeRPG.EditorTools
             var root = canvasGO.transform;
 
             var enemyContainer = BuildWorld(root, out Transform heroContainer);
-            BuildTopBar(root, out Text goldText, out Text luckText);
+            BuildTopBar(root, out Text goldText, out Text gemText, out Text luckText);
             BuildStageTitle(root, out Text stageNumText);
             var dots = BuildProgressRoad(root);
             BuildBossTimer(root, out GameObject bossTimerRoot, out Text bossTimerText);
@@ -87,6 +88,7 @@ namespace SlimeRPG.EditorTools
             roller.diceButton = diceBtn;
             roller.diceImage = diceImg;
             roller.goldText = goldText;
+            roller.gemsText = gemText;
             roller.luckText = luckText;
             roller.popupNameText = popupName;
             roller.popupChanceText = popupChance;
@@ -110,10 +112,9 @@ namespace SlimeRPG.EditorTools
             // "new slime" alert badge — parented to the NavBar (last child) so it draws OVER the adjacent button
             var collBadge = MakeCircle("CollBadge", collectionBtn.transform.parent, new Color(0.86f, 0.26f, 0.30f, 1f));
             var cbr = collBadge.rectTransform; cbr.anchorMin = cbr.anchorMax = new Vector2(0.2f, 1f); cbr.pivot = new Vector2(1f, 1f);
-            cbr.sizeDelta = new Vector2(46, 46); cbr.anchoredPosition = new Vector2(-8, -6); collBadge.raycastTarget = false;
-            var cbt = MakeText("N", collBadge.transform, "1", 26, Color.white, TextAnchor.MiddleCenter); cbt.raycastTarget = false; Stretch(cbt.rectTransform);
+            cbr.sizeDelta = new Vector2(30, 30); cbr.anchoredPosition = new Vector2(-14, -8); collBadge.raycastTarget = false;
             collBadge.gameObject.SetActive(false);
-            roller.collectionBadge = collBadge.gameObject; roller.collectionBadgeText = cbt;
+            roller.collectionBadge = collBadge.gameObject;
 
             var nav = gm.AddComponent<ScreenNav>();
             nav.inventoryButton = invBtn; nav.skillsButton = skillsBtn; nav.collectionButton = collectionBtn;
@@ -252,7 +253,7 @@ namespace SlimeRPG.EditorTools
 
         // ================= top bar =================
 
-        static void BuildTopBar(Transform root, out Text goldText, out Text luckText)
+        static void BuildTopBar(Transform root, out Text goldText, out Text gemText, out Text luckText)
         {
             // 3 smaller rounded fields floating over the sky (no full-width bar) — Gold | Gems | Luck
             const float fieldH = 74f, sideW = 244f, midW = 244f, topY = -22f; // midW kept at 244 (user-tuned diamond width)
@@ -276,7 +277,7 @@ namespace SlimeRPG.EditorTools
             var gem = MakePanel("GemIcon", gemField.transform, GemCol);
             var gemr = gem.rectTransform; gemr.anchorMin = gemr.anchorMax = new Vector2(0, 0.5f); gemr.pivot = new Vector2(0.5f, 0.5f); // centre pivot so the 45° rotation stays vertically centred
             gemr.sizeDelta = new Vector2(34, 34); gemr.anchoredPosition = new Vector2(38, 0); gem.transform.localRotation = Quaternion.Euler(0, 0, 45);
-            var gemText = MakeText("GemText", gemField.transform, "0", 34, GemCol, TextAnchor.MiddleLeft);
+            gemText = MakeText("GemText", gemField.transform, "0", 34, GemCol, TextAnchor.MiddleLeft);
             var gmt = gemText.rectTransform; gmt.anchorMin = Vector2.zero; gmt.anchorMax = Vector2.one;
             gmt.offsetMin = new Vector2(72, 0); gmt.offsetMax = new Vector2(-66, 0);
             AddInsidePlus(gemField);
@@ -894,12 +895,20 @@ namespace SlimeRPG.EditorTools
             var cr = card.rectTransform; cr.anchorMin = cr.anchorMax = new Vector2(0.5f, 0.5f); cr.pivot = new Vector2(0.5f, 0.5f);
             cr.sizeDelta = new Vector2(940, 1340); cr.anchoredPosition = Vector2.zero;
             var title = MakeText("Title", card.transform, "Collection", 46, TextCol, TextAnchor.MiddleLeft);
-            var ti = title.rectTransform; ti.anchorMin = new Vector2(0, 1); ti.anchorMax = new Vector2(1, 1); ti.pivot = new Vector2(0.5f, 1); ti.sizeDelta = new Vector2(-80, 90); ti.anchoredPosition = new Vector2(40, -30);
+            var ti = title.rectTransform; ti.anchorMin = new Vector2(0, 1); ti.anchorMax = new Vector2(0, 1); ti.pivot = new Vector2(0, 1); ti.sizeDelta = new Vector2(360, 90); ti.anchoredPosition = new Vector2(40, -30);
             closeBtn = MakeCloseButton(card.transform);
+
+            // top counter bar (unique collected / total) — to the right of the title, clear of the close button
+            var topBg = MakePanel("TopBar", card.transform, new Color(0.09f, 0.10f, 0.13f, 1f));
+            var tbr = topBg.rectTransform; tbr.anchorMin = tbr.anchorMax = new Vector2(1, 1); tbr.pivot = new Vector2(1, 1);
+            tbr.sizeDelta = new Vector2(390, 46); tbr.anchoredPosition = new Vector2(-132, -52);
+            var topFill = MakeRounded("Fill", topBg.transform, ProgressBlue);
+            var tfr = topFill.rectTransform; tfr.anchorMin = new Vector2(0, 0); tfr.anchorMax = new Vector2(0, 1); tfr.pivot = new Vector2(0, 0.5f); tfr.offsetMin = Vector2.zero; tfr.offsetMax = Vector2.zero; topFill.raycastTarget = false;
+            var topCount = MakeText("Count", topBg.transform, "0/100", 28, Color.white, TextAnchor.MiddleCenter); topCount.fontStyle = FontStyle.Bold; topCount.raycastTarget = false; Stretch(topCount.rectTransform);
 
             var scrollGO = new GameObject("Scroll", typeof(RectTransform), typeof(Image), typeof(ScrollRect));
             scrollGO.transform.SetParent(card.transform, false);
-            var sc = scrollGO.GetComponent<RectTransform>(); sc.anchorMin = Vector2.zero; sc.anchorMax = Vector2.one; sc.offsetMin = new Vector2(24, 24); sc.offsetMax = new Vector2(-24, -130);
+            var sc = scrollGO.GetComponent<RectTransform>(); sc.anchorMin = Vector2.zero; sc.anchorMax = Vector2.one; sc.offsetMin = new Vector2(24, 180); sc.offsetMax = new Vector2(-24, -130);
             scrollGO.GetComponent<Image>().color = new Color(0.09f, 0.10f, 0.13f, 1f);
             var scroll = scrollGO.GetComponent<ScrollRect>(); scroll.horizontal = false; scroll.vertical = true; scroll.movementType = ScrollRect.MovementType.Clamped; scroll.scrollSensitivity = 24f;
             var viewGO = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(RectMask2D));
@@ -915,10 +924,11 @@ namespace SlimeRPG.EditorTools
             scroll.content = cc;
 
             int n = RarityNames.Length;
-            var icons = new Image[n]; var eyesArr = new GameObject[n]; var names = new Text[n]; var chances = new Text[n];
+            var icons = new Image[n]; var eyesArr = new GameObject[n]; var names = new Text[n]; var chances = new Text[n]; var dots = new GameObject[n]; var cellBtns = new Button[n];
             for (int i = 0; i < n; i++)
             {
                 var cell = MakePanel("Coll_" + i, contentGO.transform, new Color(0.13f, 0.15f, 0.18f, 1f));
+                var cellBtn = cell.gameObject.AddComponent<Button>(); cellBtn.targetGraphic = cell; cellBtns[i] = cellBtn;
                 var body = MakeCircle("Body", cell.transform, new Color(0.20f, 0.22f, 0.26f));
                 var bdr = body.rectTransform; bdr.anchorMin = bdr.anchorMax = new Vector2(0.5f, 1); bdr.pivot = new Vector2(0.5f, 1); bdr.sizeDelta = new Vector2(120, 120); bdr.anchoredPosition = new Vector2(0, -16);
                 body.raycastTarget = false; icons[i] = body;
@@ -933,8 +943,35 @@ namespace SlimeRPG.EditorTools
                 var ch = MakeText("Chance", cell.transform, "1/?", 30, GoldCol, TextAnchor.MiddleCenter); ch.raycastTarget = false;
                 var chr = ch.rectTransform; chr.anchorMin = new Vector2(0, 0); chr.anchorMax = new Vector2(1, 0); chr.pivot = new Vector2(0.5f, 0); chr.sizeDelta = new Vector2(-8, 50); chr.anchoredPosition = new Vector2(0, 18);
                 chances[i] = ch;
+                // "new slime" red dot (top-right of the cell), hidden until this slime is collected + unseen
+                var dot = MakeCircle("NewDot", cell.transform, new Color(0.86f, 0.26f, 0.30f, 1f));
+                var dr = dot.rectTransform; dr.anchorMin = dr.anchorMax = new Vector2(1, 1); dr.pivot = new Vector2(1, 1); dr.sizeDelta = new Vector2(34, 34); dr.anchoredPosition = new Vector2(-10, -10);
+                dot.raycastTarget = false; dot.gameObject.SetActive(false); dots[i] = dot.gameObject;
             }
-            ui.icons = icons; ui.eyes = eyesArr; ui.names = names; ui.chances = chances;
+
+            // ----- reward track (milestone bar + Collect button) along the bottom of the card -----
+            const float barH = 88f;
+            var caption = MakeText("RewardCaption", card.transform, "Collection reward: 100 gems", 24, SubTextCol, TextAnchor.MiddleLeft);
+            var capr = caption.rectTransform; capr.anchorMin = capr.anchorMax = new Vector2(0, 0); capr.pivot = new Vector2(0, 0); capr.sizeDelta = new Vector2(600, 34); capr.anchoredPosition = new Vector2(28, 34 + barH + 8);
+
+            var rewardBg = MakeRounded("RewardBar", card.transform, new Color(0.09f, 0.10f, 0.13f, 1f));
+            var rbr = rewardBg.rectTransform; rbr.anchorMin = rbr.anchorMax = new Vector2(0, 0); rbr.pivot = new Vector2(0, 0); rbr.sizeDelta = new Vector2(644, barH); rbr.anchoredPosition = new Vector2(24, 34);
+            var rewardFill = MakeRounded("Fill", rewardBg.transform, ProgressBlue);
+            var rfr = rewardFill.rectTransform; rfr.anchorMin = new Vector2(0, 0); rfr.anchorMax = new Vector2(0, 1); rfr.pivot = new Vector2(0, 0.5f); rfr.offsetMin = Vector2.zero; rfr.offsetMax = Vector2.zero; rewardFill.raycastTarget = false;
+            var rewardLabel = MakeText("Label", rewardBg.transform, "0/5", 34, Color.white, TextAnchor.MiddleCenter); rewardLabel.fontStyle = FontStyle.Bold; rewardLabel.raycastTarget = false; Stretch(rewardLabel.rectTransform);
+
+            var claim = MakeRounded("Collect", card.transform, Forest);
+            var clr = claim.rectTransform; clr.anchorMin = clr.anchorMax = new Vector2(1, 0); clr.pivot = new Vector2(1, 0); clr.sizeDelta = new Vector2(232, barH); clr.anchoredPosition = new Vector2(-24, 34);
+            var claimBtn = claim.gameObject.AddComponent<Button>(); claimBtn.targetGraphic = claim;
+            var claimTxt = MakeText("Label", claim.transform, "Collect", 34, Color.white, TextAnchor.MiddleCenter); claimTxt.fontStyle = FontStyle.Bold; claimTxt.raycastTarget = false; Stretch(claimTxt.rectTransform);
+            var claimDot = MakeCircle("ClaimDot", claim.transform, new Color(0.86f, 0.26f, 0.30f, 1f));
+            var cdr = claimDot.rectTransform; cdr.anchorMin = cdr.anchorMax = new Vector2(1, 1); cdr.pivot = new Vector2(1, 1); cdr.sizeDelta = new Vector2(34, 34); cdr.anchoredPosition = new Vector2(-6, -6);
+            claimDot.raycastTarget = false; claimDot.gameObject.SetActive(false);
+
+            ui.icons = icons; ui.eyes = eyesArr; ui.names = names; ui.chances = chances; ui.newDots = dots; ui.cells = cellBtns;
+            ui.topCountText = topCount; ui.topFill = topFill.rectTransform;
+            ui.rewardLabel = rewardLabel; ui.rewardFill = rewardFill.rectTransform;
+            ui.claimButton = claimBtn; ui.claimDot = claimDot.gameObject;
             return ui;
         }
 
