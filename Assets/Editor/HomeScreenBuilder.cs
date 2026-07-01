@@ -1048,18 +1048,16 @@ namespace SlimeRPG.EditorTools
             Vector2 c0 = Vector2.zero;
             var center = Node("Start", c0, SkillNode.Effect.AutoRoll, 0);                       // [0]
 
-            // six straight spokes radiate from the centre — they diverge by 60° so they never cross
-            var hs1 = Node("Hero Slot", c0 + dN, SkillNode.Effect.HeroSlot, 100); Link(center, hs1); // [1]
-            Chain(hs1, c0 + dN, dN, "Hero Slot", SkillNode.Effect.HeroSlot, new[] { 300, 800, 2000 });
+            // six straight spokes radiate from the centre — they diverge by 60° so they never cross.
+            // North spoke = the roll-streak progression (Gold -> Platinum -> Diamond Roll). Team SLOTS are
+            // NOT in the tree anymore (they're gold-bought on the roster); a permanent "+1 starting slot"
+            // node (max +3) is reserved for a future POST-ASCENSION tier — free starting slots are late-game.
+            var gr = Node("Gold Roll", c0 + dN, SkillNode.Effect.GoldRoll, 300); Link(center, gr);        // [1]
+            var pr = Node("Platinum Roll", c0 + dN * 2, SkillNode.Effect.PlatinumRoll, 800); Link(gr, pr);
+            var dr = Node("Diamond Roll", c0 + dN * 3, SkillNode.Effect.DiamondRoll, 2000); Link(pr, dr);
 
             var lk1 = Node("Luck", c0 + dNE, SkillNode.Effect.Luck, 60); Link(center, lk1);
-            var lkEnd = Chain(lk1, c0 + dNE, dNE, "Luck", SkillNode.Effect.Luck, new[] { 160, 420 }); // tip at c0 + dNE*3
-
-            // Spin-streak chain branches straight UP off the TIP of the Luck arm — far to the right of the
-            // Hero Slot column, so it reads as a clean separate branch instead of touching unrelated hexes.
-            var gr = Node("Gold Roll", c0 + dNE * 3 + dN, SkillNode.Effect.GoldRoll, 300); Link(lkEnd, gr);
-            var pr = Node("Platinum Roll", c0 + dNE * 3 + dN * 2, SkillNode.Effect.PlatinumRoll, 800); Link(gr, pr);
-            var dr = Node("Diamond Roll", c0 + dNE * 3 + dN * 3, SkillNode.Effect.DiamondRoll, 2000); Link(pr, dr);
+            Chain(lk1, c0 + dNE, dNE, "Luck", SkillNode.Effect.Luck, new[] { 160, 420 });
 
             var dm1 = Node("Damage", c0 + dSE, SkillNode.Effect.Damage, 60); Link(center, dm1);
             Chain(dm1, c0 + dSE, dSE, "Damage", SkillNode.Effect.Damage, new[] { 160, 420 });
@@ -1077,7 +1075,7 @@ namespace SlimeRPG.EditorTools
 
             center.SetState(SkillNode.State.Available);
             for (int i = 1; i < nodes.Count; i++) nodes[i].SetState(SkillNode.State.Hidden);
-            nodesOut = nodes.ToArray(); // [0]=center, [1]=Hero Slot
+            nodesOut = nodes.ToArray(); // [0]=center, [1]=Gold Roll (streak spoke); no Hero Slot nodes anymore
         }
 
         static SkillNode MakeHexNode(Transform parent, string label, Vector2 pos, float size, SkillNode.Effect effect, int baseCost)
