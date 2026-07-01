@@ -11,8 +11,10 @@ namespace SlimeRPG
         public string name;
         public Color color = Color.white;
         public float baseWeight = 1f;
-        /// <summary>Rarity tier 0..6 (Common..Divine) — drives luck weighting, stats, and the card border colour.</summary>
+        /// <summary>Rarity tier 0..6 (Common..Divine) — drives stats and the card border colour.</summary>
         public int tier;
+        /// <summary>Rarity rank 0 (commonest) .. 1 (rarest) across the whole pool — how strongly luck favours this slime.</summary>
+        public float luckRank;
         /// <summary>Base odds as the 1/x denominator (1/2 -> 2, 1/50000 -> 50000).</summary>
         public int Denominator => Mathf.Max(1, Mathf.RoundToInt(1f / Mathf.Max(1e-7f, baseWeight)));
     }
@@ -228,7 +230,7 @@ namespace SlimeRPG
             var w = new float[rarities.Count];
             for (int i = 0; i < rarities.Count; i++)
             {
-                w[i] = rarities[i].baseWeight * Mathf.Pow(effLuck, rarities[i].tier);
+                w[i] = rarities[i].baseWeight * Mathf.Pow(effLuck, SlimeCatalog.LuckExponentMax * rarities[i].luckRank);
                 total += w[i];
             }
             float r = Random.value * total;

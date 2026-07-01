@@ -22,7 +22,8 @@ namespace SlimeRPG
         public Button[] slotButtons;      // SlotCount — per-row Unlock/Upgrade
         public Text[] slotButtonLabels;   // SlotCount
         public GameObject[] slotCoinIcons; // SlotCount — gold coin shown in the Upgrade state
-        public Text[] slotCostLabels;      // SlotCount — upgrade cost (placeholder)
+        public Text[] slotCostLabels;      // SlotCount — upgrade/unlock gold cost
+        public Text[] slotLevelLabels;     // SlotCount — "Lv N" per-slot upgrade level
         public Button[] slotEquipButtons;  // SlotCount — "Equip" shown on an unlocked-but-empty slot -> opens inventory
         public Button unlockSlotButton;   // optional legacy button (Skill Tree); may be null
         public Text unlockSlotLabel;
@@ -43,8 +44,17 @@ namespace SlimeRPG
 
         Color SlimeColor(int idx) => (roller != null && idx >= 0 && idx < roller.rarities.Count) ? roller.rarities[idx].color : Color.gray;
         int SlimeTier(int idx) => (roller != null && idx >= 0 && idx < roller.rarities.Count) ? roller.rarities[idx].tier : 0;
-        // cost to unlock the slot at this index (index 0 = slot 1, free)
-        static readonly int[] SlotCosts = { 0, 100, 300, 800, 2000, 5000, 12000 };
+
+        // Gold cost to UNLOCK the slot at this index (index 0 = slot 1, free). Steep ~5x ramp so getting all
+        // 7 is a real grind (ascension should unlock ~around affording slot 6). Resets on ascension later.
+        static readonly int[] SlotCosts = { 0, 100, 500, 2500, 12000, 60000, 300000 };
+
+        // Per-slot UPGRADE (the always-something-to-click gold sink): each level boosts the slot's hero every
+        // stat a little; cheap and slow (2g at Lv0 -> ~10g by Lv10 via 1.175^level, climbing after). Slot-attached.
+        public const float UpgradePerLevel = 0.06f;                         // +6% DPS & HP per level
+        readonly int[] slotUpgradeLevel = new int[SlotCount];
+        public int SlotUpgradeCost(int level) => Mathf.RoundToInt(2f * Mathf.Pow(1.175f, level));
+        float SlotMult(int slot) => 1f + UpgradePerLevel * slotUpgradeLevel[slot];
 
         void Start()
         {
@@ -127,11 +137,29 @@ namespace SlimeRPG
 
         public int NextSlotCost() => unlockedSlots >= SlotCount ? -1 : SlotCosts[unlockedSlots];
 
-        /// <summary>Per-row button: unlocked slot = (placeholder) upgrade; the next locked slot = go to the Skill Tree.</summary>
+        /// <summary>Per-row button: an unlocked slot buys a per-slot upgrade; the next locked slot buys the unlock (gold).</summary>
         void OnSlotButton(int i)
         {
-            if (i < unlockedSlots) { /* slot upgrade — placeholder, no effect yet */ }
-            else if (i == unlockedSlots) OpenSlotUnlock();
+            if (i < unlockedSlots) TryUpgradeSlot(i);
+            else if (i == unlockedSlots) UnlockSlot();
+        }
+
+        /// <summary>Buy one per-slot upgrade level with gold and retune the equipped hero in place (no heal).</summary>
+        void TryUpgradeSlot(int i)
+        {
+            if (roller == null || i < 0 || i >= unlockedSlots) return;
+            int cost = SlotUpgradeCost(slotUpgradeLevel[i]);
+            if (roller.gold < cost) return;
+            roller.gold -= cost;
+            roller.UpdateGoldUI();
+            slotUpgradeLevel[i]++;
+            if (_slotHeroes[i] != null && equipped[i] >= 0)
+            {
+                int tier = SlimeTier(equipped[i]);
+                _slotHeroes[i].SetStats(SlimeCatalog.TierHp[tier] * SlotMult(i), SlimeCatalog.TierDps[tier] * SlotMult(i));
+            }
+            RefreshSlots();
+            roller.OnInventoryChanged?.Invoke();
         }
 
         /// <summary>Slots are only unlocked via the Skill Tree. Open it and pulse the NEXT buyable Hero Slot hex.</summary>
@@ -193,12 +221,19 @@ namespace SlimeRPG
                     slotEquipButtons[i].gameObject.SetActive(unlocked && equipped[i] < 0);
                 if (slotButtonLabels != null && i < slotButtonLabels.Length && slotButtonLabels[i] != null)
                     slotButtonLabels[i].text = unlocked ? "Upgrade" : (isNext ? "Unlock" : "Locked");
-                // Upgrade state shows a gold coin + cost (placeholder); Unlock/Locked hide them
-                if (slotCoinIcons != null && i < slotCoinIcons.Length && slotCoinIcons[i] != null) slotCoinIcons[i].SetActive(unlocked);
+                // both the Upgrade (unlocked) and Unlock (next) states show a gold coin + cost
+                bool showCost = unlocked || isNext;
+                if (slotCoinIcons != null && i < slotCoinIcons.Length && slotCoinIcons[i] != null) slotCoinIcons[i].SetActive(showCost);
                 if (slotCostLabels != null && i < slotCostLabels.Length && slotCostLabels[i] != null)
                 {
-                    slotCostLabels[i].gameObject.SetActive(unlocked);
-                    if (unlocked) slotCostLabels[i].text = "100";
+                    slotCostLabels[i].gameObject.SetActive(showCost);
+                    if (unlocked) slotCostLabels[i].text = NumberFormat.Short(SlotUpgradeCost(slotUpgradeLevel[i]));
+                    else if (isNext) slotCostLabels[i].text = NumberFormat.Short(SlotCosts[i]);
+                }
+                if (slotLevelLabels != null && i < slotLevelLabels.Length && slotLevelLabels[i] != null)
+                {
+                    slotLevelLabels[i].gameObject.SetActive(unlocked);
+                    if (unlocked) slotLevelLabels[i].text = "Lv " + slotUpgradeLevel[i];
                 }
                 if (slotButtons != null && i < slotButtons.Length && slotButtons[i] != null)
                     slotButtons[i].interactable = unlocked || isNext;
@@ -230,7 +265,7 @@ namespace SlimeRPG
                 else if (_slotHeroes[i] == null || _slotRarity[i] != desired)
                 {
                     if (_slotHeroes[i] != null) Destroy(_slotHeroes[i].gameObject);
-                    _slotHeroes[i] = combat.CreateUnit(heroContainer, Vector2.zero, 122f, SlimeColor(desired), true, SlimeCatalog.TierHp[SlimeTier(desired)], SlimeCatalog.TierDps[SlimeTier(desired)]);
+                    _slotHeroes[i] = combat.CreateUnit(heroContainer, Vector2.zero, 122f, SlimeColor(desired), true, SlimeCatalog.TierHp[SlimeTier(desired)] * SlotMult(i), SlimeCatalog.TierDps[SlimeTier(desired)] * SlotMult(i));
                     _slotRarity[i] = desired;
                 }
                 // else: same rarity in this slot -> keep the existing hero (and its current HP)

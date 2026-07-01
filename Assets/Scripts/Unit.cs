@@ -34,6 +34,16 @@ namespace SlimeRPG
             UpdateBar();
         }
 
+        /// <summary>Retune stats (e.g. a slot upgrade) keeping the current HP fraction — does NOT heal to full.</summary>
+        public void SetStats(float newMaxHp, float dmg)
+        {
+            float pct = maxHp > 0f ? hp / maxHp : 1f;
+            maxHp = newMaxHp;
+            hp = maxHp * pct;
+            damage = dmg;
+            UpdateBar();
+        }
+
         public void ResetFull()
         {
             hp = maxHp;

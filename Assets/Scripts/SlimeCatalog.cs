@@ -32,8 +32,15 @@ namespace SlimeRPG
         public static readonly float[] TierDps    = { 6f, 14f, 32f, 74f, 170f, 390f, 900f };  // ~2.3x/tier
         public static readonly float[] TierHp     = { 80f, 180f, 420f, 970f, 2200f, 5000f, 11500f };
         public static readonly int[]   TierSell   = { 5, 15, 45, 140, 430, 1300, 4000 };
-        // Per-slime base drop weight (the "1/x" shown on the card is 1/weight; real odds are normalised).
-        public static readonly float[] TierWeight = { 0.5f, 0.1f, 0.025f, 0.006f, 0.0012f, 0.0002f, 0.00002f };
+
+        // Each slime gets its OWN base drop weight (not tier-shared) along a smooth geometric gradient
+        // from WeightStart (slime 0) to WeightEnd (last slime). The "1/x" on the card = 1/weight.
+        public const float WeightStart = 0.5f;      // commonest ~ 1/2
+        public const float WeightEnd   = 0.000004f; // rarest   ~ 1/250000
+        // Luck raises rarer slimes' weights by luck^(LuckExponentMax * rank), rank = 0 (commonest)..1 (rarest).
+        // Keeping the max exponent small stops a couple of Luck upgrades from making Mythic/Divine spam
+        // (the old luck^tier gave the rarest luck^6 — a single 1.5x Luck node inflated Divine ~11x).
+        public const float LuckExponentMax = 2.2f;
 
         public static int Total { get { int t = 0; for (int i = 0; i < PerTier.Length; i++) t += PerTier[i]; return t; } }
 
@@ -55,15 +62,24 @@ namespace SlimeRPG
         public static List<SlimeRarity> BuildPool()
         {
             var list = new List<SlimeRarity>(Total);
+            int total = Total;
+            // geometric decay so each slime is a touch rarer than the previous (its own drop rate)
+            float decay = Mathf.Pow(WeightEnd / WeightStart, 1f / (total - 1));
+            int global = 0;
             for (int tier = 0; tier < TierCount; tier++)
                 for (int j = 0; j < PerTier[tier]; j++)
+                {
+                    float rank = (float)global / (total - 1); // 0 (commonest) .. 1 (rarest) — luck weighting
                     list.Add(new SlimeRarity
                     {
                         name = TierNames[tier] + " Slime " + (j + 1),
                         color = BodyColor(tier, j, PerTier[tier]),
-                        baseWeight = TierWeight[tier],
+                        baseWeight = WeightStart * Mathf.Pow(decay, global),
                         tier = tier,
+                        luckRank = rank,
                     });
+                    global++;
+                }
             return list;
         }
     }

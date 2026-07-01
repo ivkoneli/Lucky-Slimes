@@ -70,7 +70,7 @@ namespace SlimeRPG.EditorTools
             BuildStageTitle(root, out Text stageNumText);
             var dots = BuildProgressRoad(root);
             BuildBossTimer(root, out GameObject bossTimerRoot, out Text bossTimerText);
-            BuildBottomSection(root, out Button diceBtn, out Image diceImg, out Image cooldownOverlay, out Button invBtn, out Button skillsBtn, out Button collectionBtn, out Image[] slotMini, out GameObject[] slotLock, out Button[] slotButtons, out Text[] slotButtonLabels, out GameObject[] slotCoins, out Text[] slotCostLabels, out Button[] slotEquipBtns, out DiceSpinner diceSpinner, out GameObject[] streakChips, out Image[] streakFills, out Image spinFill, out Text spinCounter, out Image spinBorder);
+            BuildBottomSection(root, out Button diceBtn, out Image diceImg, out Image cooldownOverlay, out Button invBtn, out Button skillsBtn, out Button collectionBtn, out Image[] slotMini, out GameObject[] slotLock, out Button[] slotButtons, out Text[] slotButtonLabels, out GameObject[] slotCoins, out Text[] slotCostLabels, out Text[] slotLevelLabels, out Button[] slotEquipBtns, out DiceSpinner diceSpinner, out GameObject[] streakChips, out Image[] streakFills, out Image spinFill, out Text spinCounter, out Image spinBorder);
             BuildPullPopup(root, out Text popupName, out Text popupChance, out GameObject popupRoot);
             var invUI = BuildInventoryPanel(root, out GameObject invPanel, out Button invClose);
             var collUI = BuildCollectionPanel(root, out GameObject collPanel, out Button collClose);
@@ -135,6 +135,7 @@ namespace SlimeRPG.EditorTools
             team.slotButtonLabels = slotButtonLabels;
             team.slotCoinIcons = slotCoins;
             team.slotCostLabels = slotCostLabels;
+            team.slotLevelLabels = slotLevelLabels;
             team.slotEquipButtons = slotEquipBtns;
             team.unlockedSlots = 1;
             team.inventoryPanel = invPanel;
@@ -380,7 +381,7 @@ namespace SlimeRPG.EditorTools
 
         // ===== bottom: fixed navbar + scrollable 7-slot slime roster + dice dome =====
 
-        static void BuildBottomSection(Transform root, out Button diceBtn, out Image diceImg, out Image cooldownOverlay, out Button invBtn, out Button skillsBtn, out Button collectionBtn, out Image[] slotMini, out GameObject[] slotLock, out Button[] slotButtons, out Text[] slotButtonLabels, out GameObject[] slotCoins, out Text[] slotCostLabels, out Button[] slotEquipBtns, out DiceSpinner diceSpinner, out GameObject[] streakChips, out Image[] streakFills, out Image spinFill, out Text spinCounter, out Image spinBorder)
+        static void BuildBottomSection(Transform root, out Button diceBtn, out Image diceImg, out Image cooldownOverlay, out Button invBtn, out Button skillsBtn, out Button collectionBtn, out Image[] slotMini, out GameObject[] slotLock, out Button[] slotButtons, out Text[] slotButtonLabels, out GameObject[] slotCoins, out Text[] slotCostLabels, out Text[] slotLevelLabels, out Button[] slotEquipBtns, out DiceSpinner diceSpinner, out GameObject[] streakChips, out Image[] streakFills, out Image spinFill, out Text spinCounter, out Image spinBorder)
         {
             const int SLOTS = 7;
             Color cellFill = new Color(0.13f, 0.15f, 0.18f, 1f);
@@ -444,7 +445,7 @@ namespace SlimeRPG.EditorTools
             scroll.content = content;
 
             slotMini = new Image[SLOTS]; slotLock = new GameObject[SLOTS]; slotButtons = new Button[SLOTS]; slotButtonLabels = new Text[SLOTS];
-            slotCoins = new GameObject[SLOTS]; slotCostLabels = new Text[SLOTS]; slotEquipBtns = new Button[SLOTS];
+            slotCoins = new GameObject[SLOTS]; slotCostLabels = new Text[SLOTS]; slotLevelLabels = new Text[SLOTS]; slotEquipBtns = new Button[SLOTS];
             for (int i = 0; i < SLOTS; i++)
             {
                 float y = -rowGap - i * (rowH + rowGap);
@@ -476,10 +477,11 @@ namespace SlimeRPG.EditorTools
                 eqBtn.gameObject.SetActive(false);
 
                 // level + ability slots
-                var lvl = MakeText("Level", rowFill.transform, "Lv 1", 28, TextCol, TextAnchor.MiddleLeft);
+                var lvl = MakeText("Level", rowFill.transform, "Lv 0", 28, TextCol, TextAnchor.MiddleLeft);
                 lvl.raycastTarget = false;
                 var lvr = lvl.rectTransform; lvr.anchorMin = lvr.anchorMax = new Vector2(0, 1); lvr.pivot = new Vector2(0, 1);
                 lvr.sizeDelta = new Vector2(170, 40); lvr.anchoredPosition = new Vector2(180, -22);
+                slotLevelLabels[i] = lvl;
                 for (int a = 0; a < 3; a++)
                 {
                     // stylized "+" ability slot (rounded dark cell + bordered inset + green plus glyph)
